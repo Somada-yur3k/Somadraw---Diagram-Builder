@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useDiagramEditorContext } from './DiagramEditorContext'
+import { usePopoverState } from '../../lib/usePopoverState'
 
 const EDITOR_TIPS = [
   'Double-click text to rename.',
@@ -39,6 +41,20 @@ const connectorTypes = [
   { key: 'curved', label: 'Curved Line' },
   { key: 'shape', label: 'Shape Connector' },
 ]
+// Every shape reachable from the Shapes button's dropdown - a quick-access
+// picker covering both notations at once, so placing any shape doesn't
+// require first opening the matching collapsible section below. Kept as
+// two grouped lists (not merged into one) so the dropdown can label each
+// group, same split as the sidebar's own two sections.
+const shapeToolKeys = new Set([...dfdShapes, ...flowchartShapes].map((shape) => shape.key))
+
+// Shared by the Draw Arrow and Shapes dropdowns - opens to the right of the
+// trigger button, top-aligned with it, so neither ever overflows off the
+// left edge of the collapsed w-14 icon rail the way a centered-below
+// popover half again as wide as the sidebar itself would.
+function computeToolMenuPos(rect) {
+  return { left: rect.right + 8, top: rect.top }
+}
 
 function SelectIcon() {
   return (
@@ -61,6 +77,15 @@ function ArrowToolIcon() {
     <svg width="16" height="10" viewBox="0 0 24 16" className="shrink-0">
       <line x1="2" y1="13" x2="20" y2="4" stroke="currentColor" strokeWidth="2" />
       <polygon points="20,4 14,4 19,9" fill="currentColor" />
+    </svg>
+  )
+}
+
+function ShapesToolIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <rect x="3" y="3" width="10" height="10" rx="1.5" />
+      <circle cx="16.5" cy="16.5" r="5.5" />
     </svg>
   )
 }
@@ -145,10 +170,20 @@ function horizontalToolButtonClass(active) {
   }`
 }
 
-function connectorMenuItemClass(active) {
+// Shared by the Draw Arrow and Shapes dropdown menus - one row option in
+// either list.
+function menuItemClass(active) {
   return `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors ${
     active ? 'bg-surface-soft text-ink' : 'text-body hover:bg-surface-soft hover:text-ink'
   }`
+}
+
+function MenuGroupLabel({ children }) {
+  return (
+    <div className="px-2.5 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-wide text-soft first:pt-1.5">
+      {children}
+    </div>
+  )
 }
 
 function GroupLabel({ children }) {
@@ -194,47 +229,23 @@ function EditorSidebar() {
   const [showFlowchart, setShowFlowchart] = useState(true)
 
   const currentConnectorType = state.arrowConnectorType ?? 'shape'
-  const connectorMenuRef = useRef(null)
-  const [connectorMenuOpen, setConnectorMenuOpen] = useState(false)
-  // Fixed (viewport-relative) coordinates, same reasoning as EditorTopbar's
-  // corner-radius popover: opens to the right of the button rather than
-  // centered below it, so it never overflows off the left edge of the
-  // collapsed w-14 icon rail, where a centered popover half again as wide as
-  // the whole sidebar would otherwise run off-screen.
-  const [connectorMenuPos, setConnectorMenuPos] = useState(null)
-
-  const toggleConnectorMenu = (event) => {
-    if (connectorMenuOpen) {
-      setConnectorMenuOpen(false)
-      return
-    }
-    const rect = event.currentTarget.getBoundingClientRect()
-    setConnectorMenuPos({ left: rect.right + 8, top: rect.top })
-    setConnectorMenuOpen(true)
-  }
+  const connectorTriggerRef = useRef(null)
+  const connectorPanelRef = useRef(null)
+  const connectorMenu = usePopoverState(connectorTriggerRef, connectorPanelRef, computeToolMenuPos)
 
   const chooseConnectorType = (connectorType) => {
     dispatch({ type: 'SET_ARROW_CONNECTOR_TYPE', connectorType })
-    setConnectorMenuOpen(false)
+    connectorMenu.close()
   }
 
-  useEffect(() => {
-    if (!connectorMenuOpen) return
-    const handlePointerDown = (event) => {
-      if (connectorMenuRef.current && !connectorMenuRef.current.contains(event.target)) {
-        setConnectorMenuOpen(false)
-      }
-    }
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') setConnectorMenuOpen(false)
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [connectorMenuOpen])
+  const shapesTriggerRef = useRef(null)
+  const shapesPanelRef = useRef(null)
+  const shapesMenu = usePopoverState(shapesTriggerRef, shapesPanelRef, computeToolMenuPos)
+
+  const chooseShape = (key) => {
+    selectTool(key)
+    shapesMenu.close()
+  }
 
   return (
     <aside className="flex w-14 shrink-0 flex-col items-center overflow-y-auto border-r border-line bg-white py-3 md:w-64 md:items-stretch md:px-4">
@@ -249,45 +260,94 @@ function EditorSidebar() {
         >
           <SelectIcon />
         </button>
-        {/* display:contents keeps this wrapper (needed only so the
-            outside-click handler can tell menu clicks apart from clicks
-            elsewhere) from disturbing the flex row's equal-width button
-            distribution - the button and popover behave as direct flex
-            children of the row above, exactly as if the wrapper weren't
-            there for layout purposes. */}
-        <div ref={connectorMenuRef} className="contents">
-          <button
-            type="button"
-            onClick={toggleConnectorMenu}
-            title="Draw Arrow"
-            aria-label="Draw Arrow"
-            aria-haspopup="true"
-            aria-expanded={connectorMenuOpen}
-            className={horizontalToolButtonClass(state.tool === 'arrow')}
-          >
-            <ArrowToolIcon />
-          </button>
+        <button
+          ref={connectorTriggerRef}
+          type="button"
+          onClick={connectorMenu.toggle}
+          title="Draw Arrow"
+          aria-label="Draw Arrow"
+          aria-haspopup="true"
+          aria-expanded={connectorMenu.open}
+          className={horizontalToolButtonClass(state.tool === 'arrow')}
+        >
+          <ArrowToolIcon />
+        </button>
 
-          {connectorMenuOpen && connectorMenuPos && (
+        {connectorMenu.open &&
+          connectorMenu.pos &&
+          createPortal(
             <div
+              ref={connectorPanelRef}
               className="fixed z-30 w-52 rounded-xl border border-line bg-white p-1.5 shadow-lg"
-              style={{ left: connectorMenuPos.left, top: connectorMenuPos.top }}
+              style={connectorMenu.pos}
             >
               {connectorTypes.map((c) => (
                 <button
                   key={c.key}
                   type="button"
                   onClick={() => chooseConnectorType(c.key)}
-                  className={connectorMenuItemClass(currentConnectorType === c.key)}
+                  className={menuItemClass(currentConnectorType === c.key)}
                 >
                   <ConnectorTypeIcon type={c.key} />
                   <span>{c.label}</span>
                   {currentConnectorType === c.key && <CheckIcon />}
                 </button>
               ))}
-            </div>
+            </div>,
+            document.body,
           )}
-        </div>
+
+        <button
+          ref={shapesTriggerRef}
+          type="button"
+          onClick={shapesMenu.toggle}
+          title="Shapes"
+          aria-label="Shapes"
+          aria-haspopup="true"
+          aria-expanded={shapesMenu.open}
+          className={horizontalToolButtonClass(shapeToolKeys.has(state.tool))}
+        >
+          <ShapesToolIcon />
+        </button>
+
+        {shapesMenu.open &&
+          shapesMenu.pos &&
+          createPortal(
+            <div
+              ref={shapesPanelRef}
+              className="fixed z-30 w-52 rounded-xl border border-line bg-white p-1.5 shadow-lg"
+              style={shapesMenu.pos}
+            >
+              <MenuGroupLabel>Data Flow Diagram</MenuGroupLabel>
+              {dfdShapes.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => chooseShape(t.key)}
+                  className={menuItemClass(state.tool === t.key)}
+                >
+                  <ShapeIcon toolKey={t.key} />
+                  <span>{t.label}</span>
+                  {state.tool === t.key && <CheckIcon />}
+                </button>
+              ))}
+              <MenuGroupLabel>Flowchart</MenuGroupLabel>
+              {flowchartShapes.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => chooseShape(t.key)}
+                  className={menuItemClass(state.tool === t.key)}
+                >
+                  <ShapeIcon toolKey={t.key} />
+                  <span>{t.label}</span>
+                  {state.tool === t.key && <CheckIcon />}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
+
         <button
           type="button"
           onClick={() => selectTool(textLabelTool.key)}

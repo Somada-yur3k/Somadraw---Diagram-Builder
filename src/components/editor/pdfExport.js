@@ -12,10 +12,14 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from './EditorCanvas'
 // box - without this the crop would clip right against the outermost
 // shape's edge/border.
 const CONTENT_PADDING = 40
-// Rendered at 2x the canvas's own CSS px so text and thin borders stay
+// Rendered at up to 2x the canvas's own CSS px so text and thin borders stay
 // crisp once printed, rather than the fuzzy result of a 1:1 screen capture
 // stretched up to fill an A4 page.
 const CAPTURE_SCALE = 2
+// Safari on iOS silently rasterizes an oversized <canvas> as blank instead
+// of erroring, past a ceiling of roughly 3-5 megapixels depending on device
+// RAM - this is a conservative cap comfortably under that across devices.
+const MAX_CAPTURE_PIXELS = 4_000_000
 const PAGE_MARGIN_MM = 10
 
 // Bounding box of the actual placed shapes (not the full fixed 2400x1400
@@ -55,9 +59,28 @@ export async function exportDiagramToPdf({ canvasNode, shapes, shapeOrder, fileN
   const contentWidth = bounds.right - bounds.left
   const contentHeight = bounds.bottom - bounds.top
 
-  const fullCanvas = await html2canvas(canvasNode, {
+  // Scaled down (from CAPTURE_SCALE) only for diagrams whose content box is
+  // itself already large enough that 2x would cross MAX_CAPTURE_PIXELS -
+  // small/typical diagrams still render at a full, crisp 2x.
+  const idealPixels = contentWidth * contentHeight * CAPTURE_SCALE * CAPTURE_SCALE
+  const scale =
+    idealPixels > MAX_CAPTURE_PIXELS
+      ? Math.sqrt(MAX_CAPTURE_PIXELS / (contentWidth * contentHeight))
+      : CAPTURE_SCALE
+
+  // Captured directly at the content's own bounding box (via x/y/width/height,
+  // in the same canvas-logical px as contentBounds) rather than rasterizing
+  // the full fixed 2400x1400 canvas and cropping afterward - the full canvas
+  // at CAPTURE_SCALE is ~13.4 megapixels regardless of how small the actual
+  // diagram is, which is exactly the kind of oversized capture MAX_CAPTURE_PIXELS
+  // above is guarding against.
+  const canvas = await html2canvas(canvasNode, {
     backgroundColor: '#ffffff',
-    scale: CAPTURE_SCALE,
+    scale,
+    x: bounds.left,
+    y: bounds.top,
+    width: contentWidth,
+    height: contentHeight,
     // Mutates html2canvas's own off-screen clone, never the live editor -
     // the real canvas never visibly flashes during export. Two things need
     // neutralizing here that are real for editing but wrong for a clean
@@ -70,24 +93,7 @@ export async function exportDiagramToPdf({ canvasNode, shapes, shapeOrder, fileN
     },
   })
 
-  const captureScale = fullCanvas.width / CANVAS_WIDTH
-  const cropCanvas = document.createElement('canvas')
-  cropCanvas.width = Math.round(contentWidth * captureScale)
-  cropCanvas.height = Math.round(contentHeight * captureScale)
-  const ctx = cropCanvas.getContext('2d')
-  ctx.drawImage(
-    fullCanvas,
-    bounds.left * captureScale,
-    bounds.top * captureScale,
-    contentWidth * captureScale,
-    contentHeight * captureScale,
-    0,
-    0,
-    cropCanvas.width,
-    cropCanvas.height,
-  )
-
-  const imgData = cropCanvas.toDataURL('image/png')
+  const imgData = canvas.toDataURL('image/png')
   // Landscape for a wider-than-tall diagram, portrait otherwise - a fixed
   // orientation would squeeze whichever shape doesn't match it down to a
   // sliver of the page.
