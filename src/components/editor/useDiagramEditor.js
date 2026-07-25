@@ -30,6 +30,14 @@ export const DEFAULT_SHAPE_SIZE = {
   decision: { width: 170, height: 110 },
   terminator: { width: 160, height: 56 },
   inputOutput: { width: 170, height: 64 },
+  circle: { width: 100, height: 100 },
+  square: { width: 100, height: 100 },
+  rectangle: { width: 180, height: 100 },
+  triangle: { width: 150, height: 130 },
+  diamond: { width: 150, height: 130 },
+  actor: { width: 90, height: 120 },
+  usecase: { width: 170, height: 90 },
+  boundary: { width: 280, height: 200 },
 }
 
 const DEFAULT_TEXT = {
@@ -41,6 +49,14 @@ const DEFAULT_TEXT = {
   decision: 'Decision',
   terminator: 'Start',
   inputOutput: 'Input/Output',
+  circle: 'Circle',
+  square: 'Square',
+  rectangle: 'Rectangle',
+  triangle: 'Triangle',
+  diamond: 'Diamond',
+  actor: 'Actor',
+  usecase: 'Use case',
+  boundary: 'System',
 }
 
 function createId() {
@@ -69,11 +85,15 @@ function initState(initialData) {
     arrowOrder: saved?.arrowOrder ?? [],
     selection: null,
     pendingArrowSourceId: null,
-    // Which line style the next drawn arrow will use - chosen from the
+    // Which geometry/stroke the next drawn arrow will use - chosen from the
     // sidebar's connector-type menu. Same treatment as `tool`: ephemeral UI
     // state, not persisted, not undo-tracked, always resets to the default
-    // each session.
+    // each session. `arrowLineStyle` ('solid'/'dotted') layers independently
+    // on top of `arrowConnectorType` (straight/curved/shape) - the sidebar's
+    // "Dotted Line" submenu picks both at once, but a plain Straight/Curved/
+    // Shape click always resets it back to 'solid'.
     arrowConnectorType: 'shape',
+    arrowLineStyle: 'solid',
     // Shape currently hovered (idle mouseover) or under the cursor during an
     // arrow-endpoint reconnect drag - transient UI state, same treatment as
     // selection/pendingArrowSourceId below (not persisted, not undo-tracked).
@@ -129,6 +149,7 @@ function reducer(state, action) {
         ...state,
         tool: 'arrow',
         arrowConnectorType: action.connectorType,
+        arrowLineStyle: action.lineStyle ?? 'solid',
         selection: null,
       }
 
@@ -313,6 +334,7 @@ function reducer(state, action) {
         toSide,
         toT,
         connectorType: state.arrowConnectorType,
+        lineStyle: state.arrowLineStyle,
       }
       return {
         ...state,

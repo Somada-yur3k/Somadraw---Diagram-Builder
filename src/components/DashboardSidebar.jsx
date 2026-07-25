@@ -57,6 +57,15 @@ function PencilIcon() {
   )
 }
 
+function SearchIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.35-4.35" />
+    </svg>
+  )
+}
+
 function TrashIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -311,6 +320,11 @@ function SidebarBody({
   const showLabels = isMobile || !collapsed
   const navigate = useNavigate()
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const visibleDiagrams = diagrams.filter((diagram) =>
+    diagram.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+  )
 
   const settingsTriggerRef = useRef(null)
   const settingsPanelRef = useRef(null)
@@ -333,11 +347,13 @@ function SidebarBody({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 px-3 py-4">
-        <Logo />
         {showLabels && (
-          <span className="text-[15px] font-semibold tracking-tight text-ink">
-            Somadraw
-          </span>
+          <>
+            <Logo />
+            <span className="text-[15px] font-semibold tracking-tight text-ink">
+              Somadraw
+            </span>
+          </>
         )}
         <button
           type="button"
@@ -362,8 +378,24 @@ function SidebarBody({
       </div>
 
       {showLabels && (
+        <div className="mt-2 px-2">
+          <div className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 text-soft focus-within:border-brand-purple/40">
+            <SearchIcon />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search diagrams"
+              aria-label="Search diagrams"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-soft"
+            />
+          </div>
+        </div>
+      )}
+
+      {showLabels && (
         <nav className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2">
-          {diagrams.map((diagram) => (
+          {visibleDiagrams.map((diagram) => (
             <DiagramListItem
               key={diagram.id}
               diagram={diagram}
@@ -373,6 +405,9 @@ function SidebarBody({
               onDelete={() => onDeleteDiagram(diagram.id)}
             />
           ))}
+          {visibleDiagrams.length === 0 && (
+            <p className="px-3 py-2 text-[13px] text-soft">No diagrams found.</p>
+          )}
         </nav>
       )}
       {!showLabels && <div className="flex-1" />}

@@ -3,6 +3,9 @@
 // div. These are that same look expressed as px, so the topbar stepper can
 // show/adjust "how rounded is this shape" as one continuous number instead of
 // the user losing their current look the moment they touch the control.
+// Circle/triangle/diamond render via a hardcoded rounded-full/clip-path
+// instead (see ShapeBody), so their own entries are 0 - same treatment as
+// decision/inputOutput above.
 export const DEFAULT_CORNER_RADIUS_BY_TYPE = {
   entity: 8,
   process: 16,
@@ -12,6 +15,14 @@ export const DEFAULT_CORNER_RADIUS_BY_TYPE = {
   decision: 0,
   terminator: 48,
   inputOutput: 0,
+  circle: 0,
+  square: 8,
+  rectangle: 8,
+  triangle: 0,
+  diamond: 0,
+  actor: 0,
+  usecase: 0,
+  boundary: 8,
 }
 
 export const MIN_CORNER_RADIUS = 0
@@ -33,4 +44,12 @@ export const DEFAULT_FILL_COLOR_BY_TYPE = {
   decision: '#f59e0b',
   terminator: '#64748b',
   inputOutput: '#06b6d4',
+  circle: '#3b82f6',
+  square: '#8b5cf6',
+  rectangle: '#14b8a6',
+  triangle: '#f59e0b',
+  diamond: '#64748b',
+  actor: '#6366f1',
+  usecase: '#0ea5e9',
+  boundary: '#94a3b8',
 }

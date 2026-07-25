@@ -210,6 +210,186 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     )
   }
 
+  if (shape.type === 'circle') {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center rounded-full border-2 border-brand-blue/50 bg-brand-blue/6 px-3"
+        style={{ borderColor: fill || undefined, backgroundColor: fillTint }}
+      >
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Circle"
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[13px] font-medium text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  if (shape.type === 'square') {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center border-2 border-brand-purple/50 bg-brand-purple/6 px-3"
+        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+      >
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Square"
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[13px] font-medium text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  if (shape.type === 'rectangle') {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center border-2 border-teal-500/50 bg-teal-500/6 px-3"
+        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+      >
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Rectangle"
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[13px] font-medium text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  // Clip-path polygons (not rotated squares) so they fit any width/height
+  // aspect ratio correctly - corner radius has no meaningful effect on a
+  // clipped polygon, so cornerStyle is intentionally not applied to either.
+  if (shape.type === 'triangle') {
+    return (
+      <div className="relative h-full w-full">
+        <div
+          className="absolute inset-0 border-2 border-amber-500/60 bg-amber-500/10"
+          style={{
+            clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
+            borderColor: fill || undefined,
+            backgroundColor: fillTint,
+          }}
+        />
+        <div className="relative flex h-full w-full items-end justify-center px-6 pb-2">
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="Triangle"
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[12.5px] font-medium leading-snug text-ink"
+            style={textStyle}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (shape.type === 'diamond') {
+    return (
+      <div className="relative h-full w-full">
+        <div
+          className="absolute inset-0 border-2 border-slate-500/60 bg-slate-500/10"
+          style={{
+            clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+            borderColor: fill || undefined,
+            backgroundColor: fillTint,
+          }}
+        />
+        <div className="relative flex h-full w-full items-center justify-center px-6">
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="Diamond"
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[12.5px] font-medium leading-snug text-ink"
+            style={textStyle}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // UML actor - a fixed stick-figure glyph (not stretched to the shape's own
+  // box, unlike every other shape body) with its name label beneath, same
+  // convention real UML tools use since the figure itself has no meaningful
+  // "aspect ratio" to preserve.
+  if (shape.type === 'actor') {
+    return (
+      <div
+        className="flex h-full w-full flex-col items-center justify-start gap-1 text-indigo-500"
+        style={{ color: fill || undefined }}
+      >
+        <svg viewBox="0 0 34 52" className="h-[65%] w-auto shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="17" cy="8" r="7" />
+          <line x1="17" y1="15" x2="17" y2="34" />
+          <line x1="4" y1="22" x2="30" y2="22" />
+          <line x1="17" y1="34" x2="6" y2="50" />
+          <line x1="17" y1="34" x2="28" y2="50" />
+        </svg>
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Actor"
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[12.5px] font-medium text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  // Ellipse via percentage (not fixed-px, unlike circle's rounded-full)
+  // border-radius, so it stays a true oval at any width/height aspect ratio
+  // instead of the "stadium" shape rounded-full would give a non-square box.
+  if (shape.type === 'usecase') {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center border-2 border-sky-500/50 bg-sky-500/6 px-4"
+        style={{ borderRadius: '50%', borderColor: fill || undefined, backgroundColor: fillTint }}
+      >
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Use case"
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[13px] font-medium text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  // System boundary - a plain frame with its label pinned to the top-left
+  // corner (not centered, unlike every other shape body) since it's meant to
+  // visually contain other shapes rather than hold its own centered text.
+  if (shape.type === 'boundary') {
+    return (
+      <div
+        className="relative h-full w-full border-2 border-slate-400/60 bg-slate-400/5"
+        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+      >
+        <div className="absolute left-2.5 top-2">
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="System"
+            disableDblClick={disableDblClick}
+            className="text-[12px] font-semibold text-ink"
+            style={textStyle}
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full w-full items-center px-1">
       <EditableText

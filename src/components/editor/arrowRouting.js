@@ -196,13 +196,16 @@ function cubicPointAt(p0, p1, p2, p3, t) {
 // regardless of which side produced it. Only meaningful for the two 2-bend
 // families below; the 1-bend "L-shape" case has no middle leg to offset.
 //
-// connectorType picks the line style: 'straight' and 'curved' both ignore
+// connectorType picks the line geometry: 'straight' and 'curved' both ignore
 // routeMidOffset entirely (neither has a draggable middle leg - midSegment
 // comes back null, which ArrowLayer already treats as "no route handle" for
 // the existing 1-bend case) and fall through to the default 'shape'
 // (orthogonal) behavior below for any other/unrecognized value, so old
 // arrows saved before this feature existed (no connectorType field) keep
-// rendering exactly as they always have.
+// rendering exactly as they always have. Dashed/dotted rendering is a
+// separate, independent property (arrow.lineStyle, see ArrowLayer) layered
+// on top of whichever geometry this function returns - it has no effect
+// here.
 export function computeArrowRoute(
   fromShape,
   fromSide,

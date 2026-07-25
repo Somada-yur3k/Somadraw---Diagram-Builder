@@ -52,6 +52,10 @@ function ArrowLayer() {
     return { arrow, isSelected, d, start, end, midSegment }
   })
 
+  // Short-dash pattern - only arrows with lineStyle 'dotted' use this
+  // (independent of connectorType/geometry); every other arrow stays solid.
+  const dashArrayFor = (arrow) => (arrow.lineStyle === 'dotted' ? '6 5' : undefined)
+
   const toLogicalPoint = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect()
     return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom }
@@ -212,6 +216,7 @@ function ArrowLayer() {
             fill="none"
             stroke={isSelected ? 'var(--color-brand-purple)' : 'var(--color-soft)'}
             strokeWidth={isSelected ? 2 : 1.5}
+            strokeDasharray={dashArrayFor(arrow)}
             markerEnd={`url(#${isSelected ? 'arrowhead-selected' : 'arrowhead'})`}
             style={{ pointerEvents: 'none' }}
           />
