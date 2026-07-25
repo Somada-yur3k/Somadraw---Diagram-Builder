@@ -35,9 +35,8 @@ function Footer() {
       </div>
 
       <div className="border-t border-line">
-        <div className="container flex flex-col items-center gap-1 py-6 text-center text-[13px] text-soft">
+        <div className="container flex justify-center py-6 text-[13px] text-soft">
           <span>© {new Date().getFullYear()} Somadraw. All rights reserved.</span>
-          <span>Developed by Eurika Adamos — BSIT-MI, 3rd Year, National University Fairview</span>
         </div>
       </div>
     </footer>
