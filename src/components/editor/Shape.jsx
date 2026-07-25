@@ -1,0 +1,361 @@
+import { useRef } from 'react'
+import { useDiagramEditorContext } from './DiagramEditorContext'
+import EditableText from './EditableText'
+import ShapeHandles from './ShapeHandles'
+import { textFormatStyle } from './textFormat'
+import { DEFAULT_CORNER_RADIUS_BY_TYPE } from './shapeStyle'
+
+function DeleteButton({ onClick }) {
+  return (
+    <button
+      type="button"
+      data-no-drag
+      onClick={onClick}
+      title="Delete"
+      className="absolute -right-4 -top-4 flex h-5 w-5 items-center justify-center rounded-full border border-line bg-white text-[11px] leading-none text-soft shadow-sm hover:border-rose-300 hover:text-rose-500"
+    >
+      ×
+    </button>
+  )
+}
+
+function ShapeBody({ shape, dispatch, disableDblClick }) {
+  const commitField = (field) => (value) =>
+    dispatch({ type: 'RENAME_SHAPE', id: shape.id, field, value })
+  const textStyle = textFormatStyle(shape)
+  // undefined unless the shape's own corner radius has been customized, so an
+  // untouched shape keeps rendering with its type's own Tailwind rounding
+  // class (rounded-lg / rounded-xl / none) exactly as before this feature -
+  // same "additive only, never fights the base class" approach as textStyle.
+  const cornerStyle =
+    shape.cornerRadius != null ? { borderRadius: `${shape.cornerRadius}px` } : undefined
+  // Same additive-only approach as cornerStyle/textStyle: undefined pieces
+  // leave the type's own Tailwind brand color (blue/purple/pink) showing
+  // through untouched until the user actually picks a fill color.
+  const fill = shape.fillColor
+  const fillTint = fill ? `color-mix(in srgb, ${fill} 8%, white)` : undefined
+
+  if (shape.type === 'entity') {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center rounded-lg border-2 border-brand-blue/50 bg-brand-blue/6 px-3"
+        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+      >
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Entity"
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[13px] font-semibold uppercase tracking-wide text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  if (shape.type === 'process') {
+    return (
+      <div
+        className="flex h-full w-full flex-col overflow-hidden rounded-2xl border-2 border-brand-purple"
+        style={{ ...cornerStyle, borderColor: fill || undefined }}
+      >
+        <div
+          className="flex shrink-0 items-center gap-2 bg-brand-purple px-3 py-1.5"
+          style={{ backgroundColor: fill || undefined }}
+        >
+          <EditableText
+            value={shape.badge}
+            onCommit={commitField('badge')}
+            placeholder="#"
+            disableDblClick={disableDblClick}
+            className="min-w-3.5 text-[13px] font-extrabold leading-none text-white"
+          />
+          <span className="text-[11px] font-bold uppercase tracking-wide leading-none text-white">
+            Process
+          </span>
+        </div>
+        <div
+          className="flex flex-1 items-center justify-center bg-brand-purple/6 px-3 py-2"
+          style={{ backgroundColor: fillTint }}
+        >
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="Process"
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[14px] font-medium leading-snug text-ink"
+            style={textStyle}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (shape.type === 'store') {
+    return (
+      <div
+        className="flex h-full w-full items-center gap-2 border-y-2 border-brand-pink/50 bg-brand-pink/6 px-3"
+        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+      >
+        <EditableText
+          value={shape.badge}
+          onCommit={commitField('badge')}
+          placeholder="D#"
+          disableDblClick={disableDblClick}
+          className="shrink-0 text-[11px] font-bold text-brand-pink"
+          style={{ color: fill || undefined }}
+        />
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Data store"
+          disableDblClick={disableDblClick}
+          className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  if (shape.type === 'flowProcess') {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center rounded-md border-2 border-teal-500/50 bg-teal-500/6 px-3"
+        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+      >
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Process"
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[13px] font-medium text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  // Diamond via clip-path (not a rotated square) so it fits any width/height
+  // aspect ratio correctly - corner radius has no meaningful effect on a
+  // clipped polygon, so cornerStyle is intentionally not applied here.
+  if (shape.type === 'decision') {
+    return (
+      <div className="relative h-full w-full">
+        <div
+          className="absolute inset-0 border-2 border-amber-500/60 bg-amber-500/10"
+          style={{
+            clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+            borderColor: fill || undefined,
+            backgroundColor: fillTint,
+          }}
+        />
+        <div className="relative flex h-full w-full items-center justify-center px-6">
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="Decision"
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[12.5px] font-medium leading-snug text-ink"
+            style={textStyle}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  if (shape.type === 'terminator') {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center rounded-full border-2 border-slate-500/50 bg-slate-500/6 px-4"
+        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+      >
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Start"
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[13px] font-medium text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  // Parallelogram via a skewed background layer behind an unskewed text
+  // layer, same "two-layer" approach as the decision diamond, so the label
+  // stays upright and readable instead of slanting with the shape.
+  if (shape.type === 'inputOutput') {
+    return (
+      <div className="relative h-full w-full">
+        <div
+          className="absolute inset-0 border-2 border-cyan-500/60 bg-cyan-500/10"
+          style={{
+            ...cornerStyle,
+            transform: 'skewX(-12deg)',
+            borderColor: fill || undefined,
+            backgroundColor: fillTint,
+          }}
+        />
+        <div className="relative flex h-full w-full items-center justify-center px-4">
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="Input/Output"
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[12.5px] font-medium leading-snug text-ink"
+            style={textStyle}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full w-full items-center px-1">
+      <EditableText
+        value={shape.text}
+        onCommit={commitField('text')}
+        placeholder="Text label"
+        disableDblClick={disableDblClick}
+        className="w-full text-[13px] font-medium text-ink"
+        style={textStyle}
+      />
+    </div>
+  )
+}
+
+function Shape({ shape, zoom }) {
+  const { state, dispatch } = useDiagramEditorContext()
+  const isSelected =
+    state.selection?.kind === 'shape' && state.selection.ids.includes(shape.id)
+  const isPendingArrowSource = state.pendingArrowSourceId === shape.id
+  const isArrowTool = state.tool === 'arrow'
+  const isConnectHover = state.hoveredShapeId === shape.id
+  const showHandles =
+    isSelected && state.tool === 'select' && state.selection.ids.length === 1
+  // Keeps the selection ring / connect-hover glow's own corners matching
+  // ShapeBody's, whether the shape is still on its type's own default radius
+  // or the user has customized it - otherwise a never-touched Process shape
+  // (rounded-2xl body) would show a visibly boxier rounded-lg ring around it.
+  const cornerRadius =
+    shape.cornerRadius ?? DEFAULT_CORNER_RADIUS_BY_TYPE[shape.type] ?? 0
+  const cornerStyle = { borderRadius: `${cornerRadius}px` }
+  const dragRef = useRef(null)
+  const outerRef = useRef(null)
+
+  const handlePointerDown = (event) => {
+    if (isArrowTool) {
+      event.stopPropagation()
+      event.preventDefault()
+      dispatch({ type: 'ARROW_TOOL_CLICK_SHAPE', shapeId: shape.id })
+      return
+    }
+
+    if (event.target.closest('[data-no-drag]')) return
+
+    if (event.shiftKey) {
+      event.stopPropagation()
+      dispatch({ type: 'TOGGLE_SHAPE_SELECTION', id: shape.id })
+      return
+    }
+
+    event.stopPropagation()
+
+    // If this shape is already part of a multi-selection, drag the whole
+    // group and skip the replacing SELECT below - dispatching a
+    // single-shape SELECT first would destroy the multi-selection that
+    // group-drag depends on.
+    const isPartOfGroup =
+      state.selection?.kind === 'shape' &&
+      state.selection.ids.length > 1 &&
+      state.selection.ids.includes(shape.id)
+
+    if (!isPartOfGroup) {
+      dispatch({ type: 'SELECT', kind: 'shape', ids: [shape.id] })
+    }
+    const idsToTrack = isPartOfGroup ? state.selection.ids : [shape.id]
+
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      shapes: idsToTrack.map((id) => ({
+        id,
+        startX: state.shapes[id].x,
+        startY: state.shapes[id].y,
+      })),
+    }
+  }
+
+  const handlePointerMove = (event) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const dx = (event.clientX - drag.startClientX) / zoom
+    const dy = (event.clientY - drag.startClientY) / zoom
+    for (const trackedShape of drag.shapes) {
+      dispatch({
+        type: 'MOVE_SHAPE',
+        id: trackedShape.id,
+        x: trackedShape.startX + dx,
+        y: trackedShape.startY + dy,
+      })
+    }
+  }
+
+  const endDrag = (event) => {
+    if (!dragRef.current) return
+    dragRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    dispatch({ type: 'DRAG_END', id: shape.id })
+  }
+
+  return (
+    <div
+      ref={outerRef}
+      data-shape-id={shape.id}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      className={`absolute select-none ${isSelected ? 'z-10' : 'z-0'}`}
+      style={{ left: shape.x, top: shape.y, width: shape.width, height: shape.height }}
+    >
+      <div
+        className="relative h-full w-full"
+        style={{ transform: `rotate(${shape.rotation ?? 0}deg)` }}
+      >
+        <div
+          className={`h-full w-full transition-shadow ${
+            isSelected ? 'ring-2 ring-brand-purple ring-offset-2' : ''
+          } ${
+            isPendingArrowSource
+              ? 'outline-2 outline-dashed outline-brand-blue outline-offset-2'
+              : ''
+          }`}
+          style={{
+            ...cornerStyle,
+            ...(isConnectHover
+              ? {
+                  boxShadow:
+                    '0 0 0 1px var(--color-brand-purple), 0 0 18px 4px color-mix(in srgb, var(--color-brand-purple) 35%, transparent)',
+                }
+              : null),
+          }}
+        >
+          <ShapeBody shape={shape} dispatch={dispatch} disableDblClick={state.tool !== 'select'} />
+        </div>
+        {showHandles && (
+          <DeleteButton onClick={() => dispatch({ type: 'DELETE_SELECTED' })} />
+        )}
+        {showHandles && (
+          <ShapeHandles shape={shape} dispatch={dispatch} outerRef={outerRef} zoom={zoom} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default Shape

@@ -1,0 +1,101 @@
+// Every MOVE_SHAPE/RESIZE_SHAPE/ROTATE_SHAPE dispatch sequence must eventually
+// be followed by a matching DRAG_END, or `isDragging` gets stuck true and all
+// future drags silently stop creating undo checkpoints. If a future feature
+// dispatches one of these continuous actions outside a pointer gesture (e.g.
+// arrow-key nudging), make sure it still fires a DRAG_END when the gesture ends.
+const CONTINUOUS_TYPES = new Set([
+  'MOVE_SHAPE',
+  'RESIZE_SHAPE',
+  'ROTATE_SHAPE',
+  'RECONNECT_ARROW_ENDPOINT',
+  'MOVE_ARROW_LABEL',
+  'ROTATE_ARROW_LABEL',
+  'SET_ARROW_ROUTE_OFFSET',
+])
+
+const MAX_HISTORY = 100
+
+function contentChanged(prev, next) {
+  return (
+    prev.shapes !== next.shapes ||
+    prev.shapeOrder !== next.shapeOrder ||
+    prev.arrows !== next.arrows ||
+    prev.arrowOrder !== next.arrowOrder ||
+    prev.counters !== next.counters
+  )
+}
+
+function pushPast(past, entry) {
+  const next = [...past, entry]
+  return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next
+}
+
+export function initHistory(present) {
+  return { past: [], present, future: [], isDragging: false }
+}
+
+// Wraps a plain content reducer with undo/redo history. UNDO/REDO are no-ops
+// while a drag gesture is in progress (isDragging), so pressing Ctrl+Z with
+// the mouse still held down can't corrupt the gesture's in-flight anchor -
+// see the design notes in Phase 4 of the editor plan for why that matters.
+export function createHistoryReducer(contentReducer) {
+  return function historyReducer(history, action) {
+    if (action.type === 'UNDO') {
+      if (history.isDragging || history.past.length === 0) return history
+      const previous = history.past[history.past.length - 1]
+      return {
+        past: history.past.slice(0, -1),
+        present: previous,
+        future: [history.present, ...history.future],
+        isDragging: false,
+      }
+    }
+
+    if (action.type === 'REDO') {
+      if (history.isDragging || history.future.length === 0) return history
+      const [next, ...rest] = history.future
+      return {
+        past: pushPast(history.past, history.present),
+        present: next,
+        future: rest,
+        isDragging: false,
+      }
+    }
+
+    const nextPresent = contentReducer(history.present, action)
+
+    if (action.type === 'DRAG_END') {
+      return { ...history, present: nextPresent, isDragging: false }
+    }
+
+    if (CONTINUOUS_TYPES.has(action.type)) {
+      if (nextPresent === history.present) return history
+      if (history.isDragging) {
+        return { ...history, present: nextPresent }
+      }
+      return {
+        past: pushPast(history.past, history.present),
+        present: nextPresent,
+        future: [],
+        isDragging: true,
+      }
+    }
+
+    if (nextPresent === history.present) return history
+
+    if (contentChanged(history.present, nextPresent)) {
+      return {
+        past: pushPast(history.past, history.present),
+        present: nextPresent,
+        future: [],
+        isDragging: false,
+      }
+    }
+
+    // Transient UI-only change (selection, tool, pending arrow source) -
+    // update present but don't create an undo checkpoint, and don't disturb
+    // isDragging (a transient action firing mid-drag shouldn't end the
+    // gesture's coalescing).
+    return { ...history, present: nextPresent }
+  }
+}
