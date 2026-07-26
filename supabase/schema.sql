@@ -43,9 +43,44 @@ create table feedback (
 );
 
 create index feedback_created_at_idx on feedback (created_at desc);
+-- Backs the rate-limit trigger's own lookup below (by user_id, most recent
+-- first) - without this it's a sequential scan that grows with the table.
+create index feedback_user_id_created_at_idx on feedback (user_id, created_at desc);
 
 alter table feedback enable row level security;
 
 create policy "insert own feedback" on feedback for insert with check (auth.uid() = user_id);
 create policy "owner can view all feedback" on feedback for select
   using (auth.jwt() ->> 'email' = 'eurikasomada@gmail.com');
+-- Also lets a regular (non-owner) submitter see their own past rows - the
+-- feedback form uses this to find their last submission time and show/
+-- enforce the 1-per-hour cooldown client-side. Postgres OR's every
+-- permissive SELECT policy together, so this is additive with the owner
+-- policy above, not a replacement. This is also what lets the rate-limit
+-- trigger's own lookup below see the inserting user's prior rows without
+-- needing security definer - the row it looks for is always that same
+-- user's own, which this policy already grants them.
+create policy "select own feedback" on feedback for select using (auth.uid() = user_id);
+
+-- Rate limit: at most one feedback submission per user per hour, enforced
+-- server-side (not just in the UI) so it can't be bypassed by calling
+-- Supabase directly. Raises a distinct SQLSTATE (RL001, not one of
+-- Postgres's reserved codes) rather than relying on exception text, so the
+-- client can match on error.code instead of parsing a message string.
+create function feedback_rate_limit() returns trigger
+language plpgsql
+as $$
+begin
+  if exists (
+    select 1 from feedback
+    where user_id = new.user_id
+      and created_at > now() - interval '1 hour'
+  ) then
+    raise exception 'You can only send feedback once per hour.' using errcode = 'RL001';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger feedback_rate_limit_trigger before insert on feedback
+  for each row execute function feedback_rate_limit();
