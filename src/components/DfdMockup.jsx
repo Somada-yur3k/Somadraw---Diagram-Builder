@@ -1,11 +1,55 @@
-function NodeChip({ children, className = '', active = false }) {
+// Real DFD notation, not generic chips - deliberately reuses the exact
+// class strings the editor's own Shape.jsx uses for entity/process/store
+// (see ShapeBody there) so this Hero mockup reads as an honest preview of
+// what a diagram actually looks like, not a stand-in illustration.
+function EntityNode({ children, floatClassName }) {
   return (
-    <div
-      className={`absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line bg-white px-3 py-1.5 text-[12.5px] font-medium text-ink shadow-sm ${className}`}
-    >
-      {active && <span className="h-1.5 w-1.5 rounded-full bg-brand-pink" />}
-      {children}
+    <div className={`flex h-10 w-24 items-center justify-center rounded-lg border-2 border-brand-blue/50 bg-brand-blue/6 shadow-sm ${floatClassName}`}>
+      <span className="px-1.5 text-center text-[10.5px] font-semibold uppercase tracking-wide text-ink">
+        {children}
+      </span>
     </div>
+  )
+}
+
+function ProcessNode({ badge, children, floatClassName }) {
+  return (
+    <div className={`flex h-[52px] w-28 flex-col overflow-hidden rounded-xl border-2 border-brand-purple shadow-sm ${floatClassName}`}>
+      <div className="flex shrink-0 items-center gap-1.5 bg-brand-purple px-2 py-1">
+        <span className="text-[11px] font-extrabold leading-none text-white">{badge}</span>
+        <span className="text-[9px] font-bold uppercase tracking-wide leading-none text-white">
+          Process
+        </span>
+      </div>
+      <div className="flex flex-1 items-center justify-center bg-brand-purple/6 px-2">
+        <span className="text-center text-[11px] font-medium leading-snug text-ink">
+          {children}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function StoreNode({ badge, children, floatClassName }) {
+  return (
+    <div className={`flex h-9 w-28 items-center gap-1.5 border-y-2 border-brand-pink/50 bg-brand-pink/6 px-2 shadow-sm ${floatClassName}`}>
+      <span className="shrink-0 text-[10px] font-bold text-brand-pink">{badge}</span>
+      <span className="min-w-0 flex-1 truncate text-[11px] font-medium leading-snug text-ink">
+        {children}
+      </span>
+    </div>
+  )
+}
+
+// Anchors each node's center on its left/top % position (the
+// -translate-x/y-1/2 below), independent of the floating animation on the
+// node itself - a CSS animation fully owns the `transform` property for as
+// long as it runs, so putting the float animation directly on this centering
+// element would replace the centering transform each frame instead of
+// composing with it, and the node would visibly snap out of position.
+function NodeAnchor({ className = '', children }) {
+  return (
+    <div className={`absolute -translate-x-1/2 -translate-y-1/2 ${className}`}>{children}</div>
   )
 }
 
@@ -66,12 +110,24 @@ function DfdMockup() {
             />
           </svg>
 
-          <NodeChip className="left-[16%] top-[20%]">Customer</NodeChip>
-          <NodeChip className="left-[74%] top-[20%]">Orders DB</NodeChip>
-          <NodeChip className="left-[42%] top-[50%]" active>
-            Validate Order
-          </NodeChip>
-          <NodeChip className="left-[15%] top-[78%]">Notify User</NodeChip>
+          <NodeAnchor className="left-[16%] top-[20%]">
+            <EntityNode floatClassName="animate-float-a">Customer</EntityNode>
+          </NodeAnchor>
+          <NodeAnchor className="left-[74%] top-[20%]">
+            <StoreNode badge="D1" floatClassName="animate-float-c">
+              Orders DB
+            </StoreNode>
+          </NodeAnchor>
+          <NodeAnchor className="left-[42%] top-[50%]">
+            <ProcessNode badge="1" floatClassName="animate-float-b">
+              Validate Order
+            </ProcessNode>
+          </NodeAnchor>
+          <NodeAnchor className="left-[16%] top-[78%]">
+            <ProcessNode badge="2" floatClassName="animate-float-d">
+              Notify User
+            </ProcessNode>
+          </NodeAnchor>
         </div>
       </div>
 

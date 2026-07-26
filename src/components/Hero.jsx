@@ -48,19 +48,19 @@ function Hero({ onSignIn, isSigningIn, authError }) {
         className="left-1 top-6 animate-float-a"
         dotClassName="bg-brand-purple"
       >
-        auth.service
+        Entity shape
       </FloatingPill>
       <FloatingPill
         className="bottom-2 left-1 animate-float-b"
         dotClassName="bg-brand-blue"
       >
-        user.events →
+        Draw arrow →
       </FloatingPill>
       <FloatingPill
         className="right-4 top-1/2 animate-float-c xl:right-10"
         dotClassName="bg-brand-pink"
       >
-        payments.db
+        Use case
       </FloatingPill>
 
       <div className="container relative z-10 grid gap-14 py-16 lg:grid-cols-2 lg:items-center lg:gap-10 lg:py-24">
