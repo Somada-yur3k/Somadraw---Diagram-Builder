@@ -12,7 +12,7 @@ function DeleteButton({ onClick }) {
       data-no-drag
       onClick={onClick}
       title="Delete"
-      className="absolute -right-4 -top-4 flex h-5 w-5 items-center justify-center rounded-full border border-line bg-white text-[11px] leading-none text-soft shadow-sm hover:border-rose-300 hover:text-rose-500"
+      className="pointer-events-auto absolute -right-4 -top-4 flex h-5 w-5 items-center justify-center rounded-full border border-line bg-white text-[11px] leading-none text-soft shadow-sm hover:border-rose-300 hover:text-rose-500"
     >
       ×
     </button>
@@ -376,7 +376,11 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
         className="relative h-full w-full border-2 border-slate-400/60 bg-slate-400/5"
         style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
       >
-        <div className="absolute left-2.5 top-2">
+        {/* pointer-events-auto: the outer Shape wrapper below turns itself
+            pointer-events-none for this type so shapes placed inside the
+            frame stay reachable (see Shape's own comment) - the label still
+            needs to opt back in to stay clickable for rename. */}
+        <div className="pointer-events-auto absolute left-2.5 top-2">
           <EditableText
             value={shape.text}
             onCommit={commitField('text')}
@@ -492,6 +496,17 @@ function Shape({ shape, zoom }) {
     dispatch({ type: 'DRAG_END', id: shape.id })
   }
 
+  // A system boundary is a frame meant to contain other shapes, not block
+  // them - its own hit-box normally covers its whole width/height like any
+  // other shape, which would otherwise sit on top of (and swallow every
+  // click/drag/arrow-connect meant for) whatever's placed visually inside
+  // it. pointer-events-none here opens that interior back up to whatever's
+  // beneath - a shape placed inside, or the canvas itself - while the four
+  // edge strips below opt back in so the frame itself stays selectable,
+  // draggable, and deletable from its border.
+  const isBoundary = shape.type === 'boundary'
+  const BORDER_HIT_THICKNESS = 10
+
   return (
     <div
       ref={outerRef}
@@ -500,7 +515,7 @@ function Shape({ shape, zoom }) {
       onPointerMove={handlePointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
-      className={`absolute select-none ${isSelected ? 'z-10' : 'z-0'}`}
+      className={`absolute select-none ${isSelected ? 'z-10' : 'z-0'} ${isBoundary ? 'pointer-events-none' : ''}`}
       style={{ left: shape.x, top: shape.y, width: shape.width, height: shape.height }}
     >
       <div
@@ -527,6 +542,26 @@ function Shape({ shape, zoom }) {
         >
           <ShapeBody shape={shape} dispatch={dispatch} disableDblClick={state.tool !== 'select'} />
         </div>
+        {isBoundary && (
+          <>
+            <div
+              className="pointer-events-auto absolute inset-x-0 top-0"
+              style={{ height: BORDER_HIT_THICKNESS }}
+            />
+            <div
+              className="pointer-events-auto absolute inset-x-0 bottom-0"
+              style={{ height: BORDER_HIT_THICKNESS }}
+            />
+            <div
+              className="pointer-events-auto absolute inset-y-0 left-0"
+              style={{ width: BORDER_HIT_THICKNESS }}
+            />
+            <div
+              className="pointer-events-auto absolute inset-y-0 right-0"
+              style={{ width: BORDER_HIT_THICKNESS }}
+            />
+          </>
+        )}
         {showHandles && (
           <DeleteButton onClick={() => dispatch({ type: 'DELETE_SELECTED' })} />
         )}

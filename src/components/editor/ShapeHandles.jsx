@@ -129,7 +129,7 @@ function ShapeHandles({ shape, dispatch, outerRef, zoom }) {
           onPointerMove={handleMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-white bg-brand-purple shadow-sm"
+          className="pointer-events-auto absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-white bg-brand-purple shadow-sm"
           style={{
             top: handle.top,
             left: handle.left,
@@ -150,7 +150,7 @@ function ShapeHandles({ shape, dispatch, outerRef, zoom }) {
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         title="Drag to rotate"
-        className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-[calc(100%+20px)] cursor-grab rounded-full border border-white bg-brand-purple shadow-sm active:cursor-grabbing"
+        className="pointer-events-auto absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-[calc(100%+20px)] cursor-grab rounded-full border border-white bg-brand-purple shadow-sm active:cursor-grabbing"
       />
     </>
   )

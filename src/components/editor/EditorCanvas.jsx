@@ -61,6 +61,15 @@ function EditorCanvas({ canvasNodeRef }) {
         event.preventDefault()
         dispatch({ type: 'REDO' })
       }
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'c') {
+        if (state.selection?.kind !== 'shape') return
+        event.preventDefault()
+        dispatch({ type: 'COPY_SELECTED' })
+      }
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'v') {
+        event.preventDefault()
+        dispatch({ type: 'PASTE' })
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)

@@ -6,6 +6,10 @@ import { DEFAULT_CORNER_RADIUS_BY_TYPE, clampCornerRadius, DEFAULT_FILL_COLOR_BY
 import { supabase } from '../../lib/supabaseClient'
 
 const SAVE_DEBOUNCE_MS = 500
+// Pixel offset applied to each pasted shape, relative to what was copied -
+// keeps a paste from landing exactly on top of its source, indistinguishable
+// until moved.
+const PASTE_OFFSET = 24
 
 // The exact shape a brand-new, empty diagram row's `data` column should have -
 // shared with DashboardSidebar's "+ New diagram" insert so there's one source
@@ -98,6 +102,11 @@ function initState(initialData) {
     // arrow-endpoint reconnect drag - transient UI state, same treatment as
     // selection/pendingArrowSourceId below (not persisted, not undo-tracked).
     hoveredShapeId: null,
+    // Last Ctrl+C'd shapes (plus any arrows fully contained within that
+    // selection), ready for Ctrl+V - session-only clipboard, same treatment
+    // as selection/hoveredShapeId (not persisted, not undo-tracked, and
+    // resets to empty each session rather than surviving a reload).
+    clipboard: null,
     counters: saved?.counters ?? { process: 0, store: 0 },
     // View preferences below are intentionally split on persistence/undo:
     // showGrid is a real user preference (persisted, not undo-tracked).
@@ -190,11 +199,20 @@ function reducer(state, action) {
         badge,
       }
 
+      // A system boundary is meant to contain other shapes, not sit on top
+      // of them - unshifting it to the back of the paint order (instead of
+      // the front, like every other shape) means anything dropped inside it
+      // later, and anything already on the canvas, both stay visually and
+      // interactively on top of it by default (see Shape.jsx for the
+      // pointer-events handling this pairs with).
+      const shapeOrder =
+        action.shapeType === 'boundary' ? [id, ...state.shapeOrder] : [...state.shapeOrder, id]
+
       return {
         ...state,
         tool: 'select',
         shapes: { ...state.shapes, [id]: shape },
-        shapeOrder: [...state.shapeOrder, id],
+        shapeOrder,
         selection: { kind: 'shape', ids: [id] },
         counters,
       }
@@ -522,6 +540,68 @@ function reducer(state, action) {
         pendingArrowSourceId: ids.has(state.pendingArrowSourceId)
           ? null
           : state.pendingArrowSourceId,
+      }
+    }
+
+    // Works for every shape type (DFD/flowchart/use-case/basic/label alike) -
+    // it clones whatever's selected generically by value, with no per-type
+    // branching. Arrow selection is a no-op: a lone arrow copied without its
+    // endpoint shapes would have nothing valid to reconnect to on paste.
+    case 'COPY_SELECTED': {
+      if (state.selection?.kind !== 'shape' || state.selection.ids.length === 0) return state
+      const ids = new Set(state.selection.ids)
+      const shapes = state.selection.ids.map((id) => state.shapes[id])
+      // Only arrows with both ends inside the copied set come along - one
+      // reaching outside the selection would dangle with no copied shape to
+      // reconnect to.
+      const arrows = state.arrowOrder
+        .map((id) => state.arrows[id])
+        .filter((arrow) => ids.has(arrow.fromId) && ids.has(arrow.toId))
+      return { ...state, clipboard: { shapes, arrows } }
+    }
+
+    case 'PASTE': {
+      const clip = state.clipboard
+      if (!clip || clip.shapes.length === 0) return state
+
+      const idMap = new Map()
+      const shapes = { ...state.shapes }
+      const shapeIds = []
+      // Re-offset positions (not the clipboard's own, possibly stale ones)
+      // so pasted shapes land visibly apart from their source instead of
+      // exactly on top of it.
+      const pastedShapes = []
+      for (const shape of clip.shapes) {
+        const id = createId()
+        idMap.set(shape.id, id)
+        const x = shape.x + PASTE_OFFSET
+        const y = shape.y + PASTE_OFFSET
+        shapes[id] = { ...shape, id, x, y }
+        pastedShapes.push(shapes[id])
+        shapeIds.push(id)
+      }
+
+      const arrows = { ...state.arrows }
+      const arrowIds = []
+      for (const arrow of clip.arrows) {
+        const id = createId()
+        arrows[id] = { ...arrow, id, fromId: idMap.get(arrow.fromId), toId: idMap.get(arrow.toId) }
+        arrowIds.push(id)
+      }
+
+      return {
+        ...state,
+        shapes,
+        shapeOrder: [...state.shapeOrder, ...shapeIds],
+        arrows,
+        arrowOrder: [...state.arrowOrder, ...arrowIds],
+        selection: { kind: 'shape', ids: shapeIds },
+        // Re-baselined to the just-pasted positions (arrows carry over
+        // unchanged - remapping their endpoints again next paste would only
+        // ever produce the same relative shape, ids aside) so repeated
+        // Ctrl+V without a fresh copy fans out diagonally instead of
+        // restacking every paste in the exact same spot.
+        clipboard: { shapes: pastedShapes, arrows: clip.arrows },
       }
     }
 
