@@ -26,3 +26,26 @@ $$ language plpgsql;
 
 create trigger diagrams_set_updated_at before update on diagrams
   for each row execute function set_updated_at();
+
+-- Feedback submitted from the Developer settings page - any signed-in user
+-- can send one, but only the owner (checked by email, not a role/table,
+-- since this app has exactly one owner) can read them back, via the
+-- Monitor Users panel. Keep this email in sync with OWNER_EMAIL in
+-- src/lib/ownerEmail.js - there's no single source of truth shared between
+-- SQL and the app.
+create table feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  email text not null,
+  type text not null default 'suggestion' check (type in ('suggestion', 'bug')),
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
+create index feedback_created_at_idx on feedback (created_at desc);
+
+alter table feedback enable row level security;
+
+create policy "insert own feedback" on feedback for insert with check (auth.uid() = user_id);
+create policy "owner can view all feedback" on feedback for select
+  using (auth.jwt() ->> 'email' = 'eurikasomada@gmail.com');
