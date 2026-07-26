@@ -5,6 +5,7 @@ import somadrawLogo from '../assets/SomadrawLogo.png'
 import { supabase } from '../lib/supabaseClient'
 import { usePopoverState } from '../lib/usePopoverState'
 import { createBlankDiagramData } from './editor/useDiagramEditor'
+import { OWNER_EMAIL } from '../lib/ownerEmail'
 
 const SETTINGS_PANEL_WIDTH = 224
 const SETTINGS_PANEL_MARGIN = 16
@@ -89,6 +90,14 @@ function AccountIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
       <circle cx="12" cy="8" r="4" />
       <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
+    </svg>
+  )
+}
+
+function MonitorIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
     </svg>
   )
 }
@@ -315,6 +324,7 @@ function SidebarBody({
   onSignOut,
   onToggleCollapse,
   onCloseMobile,
+  user,
 }) {
   const isMobile = variant === 'mobile'
   const showLabels = isMobile || !collapsed
@@ -450,6 +460,16 @@ function SidebarBody({
                 <DeveloperIcon />
                 <span>Developer</span>
               </button>
+              {user?.email === OWNER_EMAIL && (
+                <button
+                  type="button"
+                  onClick={() => goToSettingsPage('/workspace/monitor')}
+                  className={settingsMenuItemClass}
+                >
+                  <MonitorIcon />
+                  <span>Monitor Users</span>
+                </button>
+              )}
             </div>,
             document.body,
           )}
@@ -478,13 +498,15 @@ function SidebarBody({
   )
 }
 
-function DashboardSidebar({ onSignOut, collapsed, onToggleCollapse, mobileOpen, onCloseMobile }) {
+function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobileOpen, onCloseMobile }) {
   const [diagrams, setDiagrams] = useState([])
   const navigate = useNavigate()
   const location = useLocation()
 
   const isSettingsActive =
-    location.pathname === '/workspace/settings' || location.pathname === '/workspace/developer'
+    location.pathname === '/workspace/settings' ||
+    location.pathname === '/workspace/developer' ||
+    location.pathname === '/workspace/monitor'
   const diagramIdMatch = !isSettingsActive && location.pathname.match(/^\/workspace\/([^/]+)$/)
   const activeDiagramId = diagramIdMatch ? diagramIdMatch[1] : null
 
@@ -545,6 +567,7 @@ function DashboardSidebar({ onSignOut, collapsed, onToggleCollapse, mobileOpen, 
     onRenameDiagram: handleRenameDiagram,
     onDeleteDiagram: handleDeleteDiagram,
     onSignOut,
+    user,
   }
 
   return (

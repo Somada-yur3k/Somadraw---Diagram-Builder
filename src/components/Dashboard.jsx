@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import DashboardSidebar from './DashboardSidebar'
+import { useOnlineUsers } from '../lib/usePresence'
 
 function MenuIcon() {
   return (
@@ -13,6 +14,10 @@ function MenuIcon() {
 function Dashboard({ user, onSignOut }) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Tracked here (not in MonitorUsersView) so presence stays live for the
+  // whole /workspace session regardless of which nested route is open, and
+  // so there's exactly one Realtime subscription per tab - see usePresence.
+  const onlineUsers = useOnlineUsers(user)
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
@@ -40,7 +45,7 @@ function Dashboard({ user, onSignOut }) {
           </span>
         </header>
 
-        <Outlet />
+        <Outlet context={{ user, onlineUsers }} />
       </div>
     </div>
   )
