@@ -541,15 +541,27 @@ function Shape({ shape, zoom }) {
   // draggable, and deletable from its border.
   const isBoundary = shape.type === 'boundary'
   const BORDER_HIT_THICKNESS = 10
+  // The drag handlers below call setPointerCapture on event.currentTarget -
+  // for every other shape that's this outer div, but a boundary's outer div
+  // is pointer-events-none (see above), and capturing a pointer on a
+  // non-hit-testable element is inconsistent across browsers: mousedown
+  // could still select it (that bubbles up fine from a strip), but the
+  // captured move/up events meant to actually drag it wouldn't reliably
+  // arrive. So for a boundary, these go on the (pointer-events-auto) edge
+  // strips directly instead of the outer div, keeping capture anchored to
+  // an element that's actually a valid hit-test target.
+  const dragHandlers = {
+    onPointerDown: handlePointerDown,
+    onPointerMove: handlePointerMove,
+    onPointerUp: endDrag,
+    onPointerCancel: endDrag,
+  }
 
   return (
     <div
       ref={outerRef}
       data-shape-id={shape.id}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
+      {...(isBoundary ? null : dragHandlers)}
       className={`absolute select-none animate-shape-enter ${isSelected ? 'z-10' : 'z-0'} ${isBoundary ? 'pointer-events-none' : ''}`}
       style={{
         left: shape.x,
@@ -593,18 +605,22 @@ function Shape({ shape, zoom }) {
         {isBoundary && (
           <>
             <div
+              {...dragHandlers}
               className="pointer-events-auto absolute inset-x-0 top-0"
               style={{ height: BORDER_HIT_THICKNESS }}
             />
             <div
+              {...dragHandlers}
               className="pointer-events-auto absolute inset-x-0 bottom-0"
               style={{ height: BORDER_HIT_THICKNESS }}
             />
             <div
+              {...dragHandlers}
               className="pointer-events-auto absolute inset-y-0 left-0"
               style={{ width: BORDER_HIT_THICKNESS }}
             />
             <div
+              {...dragHandlers}
               className="pointer-events-auto absolute inset-y-0 right-0"
               style={{ width: BORDER_HIT_THICKNESS }}
             />

@@ -61,6 +61,29 @@ function EditorCanvas({ canvasNodeRef }) {
   const prevZoomRef = useRef(zoom)
   const [marqueeRect, setMarqueeRect] = useState(null)
 
+  // The scrollable area only reserved exactly CANVAS_WIDTH*zoom /
+  // CANVAS_HEIGHT*zoom of space - fine at 100% zoom on a normal-size window,
+  // but zooming out (or just having a big monitor) could leave the wrapper
+  // visibly larger than that, showing a dead plain-bg-canvas margin past the
+  // grid's edge instead of dot pattern all the way to the panel's own
+  // border. Measuring the wrapper lets the scrollable area (and the grid
+  // background drawn on it below) grow to always cover at least the visible
+  // viewport, at any zoom level or window size - CANVAS_WIDTH/CANVAS_HEIGHT
+  // themselves stay untouched (ArrowLayer's SVG bounds and PDF export both
+  // key off those), only the decorative grid margin around them expands.
+  const [viewport, setViewport] = useState({ width: 0, height: 0 })
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current
+    if (!wrapper) return
+    const observer = new ResizeObserver(([entry]) => {
+      setViewport({ width: entry.contentRect.width, height: entry.contentRect.height })
+    })
+    observer.observe(wrapper)
+    return () => observer.disconnect()
+  }, [])
+  const renderWidth = Math.max(CANVAS_WIDTH, viewport.width / zoom)
+  const renderHeight = Math.max(CANVAS_HEIGHT, viewport.height / zoom)
+
   useEffect(() => {
     const handleKeyDown = (event) => {
       const target = event.target
@@ -251,7 +274,19 @@ function EditorCanvas({ canvasNodeRef }) {
 
   return (
     <div ref={wrapperRef} className="min-h-0 flex-1 overflow-auto bg-canvas">
-      <div style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
+      <div
+        style={{
+          width: renderWidth * zoom,
+          height: renderHeight * zoom,
+          ...(state.showGrid
+            ? {
+                backgroundImage:
+                  'radial-gradient(circle, color-mix(in srgb, var(--color-ink) 18%, transparent) 1.25px, transparent 1.25px)',
+                backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+              }
+            : {}),
+        }}
+      >
         <div
           ref={(node) => {
             canvasRef.current = node
@@ -268,13 +303,6 @@ function EditorCanvas({ canvasNodeRef }) {
             height: CANVAS_HEIGHT,
             transform: `scale(${zoom})`,
             transformOrigin: '0 0',
-            ...(state.showGrid
-              ? {
-                  backgroundImage:
-                    'radial-gradient(circle, color-mix(in srgb, var(--color-ink) 18%, transparent) 1.25px, transparent 1.25px)',
-                  backgroundSize: '20px 20px',
-                }
-              : {}),
             cursor: state.tool === 'select' ? 'default' : 'crosshair',
           }}
         >
