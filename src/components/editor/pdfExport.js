@@ -82,14 +82,25 @@ export async function exportDiagramToPdf({ canvasNode, shapes, shapeOrder, fileN
     width: contentWidth,
     height: contentHeight,
     // Mutates html2canvas's own off-screen clone, never the live editor -
-    // the real canvas never visibly flashes during export. Two things need
-    // neutralizing here that are real for editing but wrong for a clean
-    // printout: the current viewport zoom (a CSS transform on this same
-    // node) and the dotted background grid, regardless of whether either
-    // is currently on.
+    // the real canvas never visibly flashes during export. Three things
+    // need neutralizing here that are real for editing but wrong for a
+    // clean printout: the current viewport zoom (a CSS transform on this
+    // same node), the dotted background grid regardless of whether either
+    // is currently on, and every shape's mount-in entrance animation
+    // (animate-shape-enter, see Shape.jsx/index.css) - html2canvas paints
+    // its clone as a fresh DOM insertion, which restarts a CSS `animation`
+    // from its 0% keyframe (opacity: 0) rather than reusing wherever the
+    // real, already-settled element's animation actually finished. Left
+    // alone, every shape got captured invisible while arrows (plain SVG,
+    // no animation) rendered fine - "only the arrows show up" in the
+    // exported PDF.
     onclone: (_doc, clonedEl) => {
       clonedEl.style.transform = 'none'
       clonedEl.style.backgroundImage = 'none'
+      for (const el of clonedEl.querySelectorAll('.animate-shape-enter')) {
+        el.style.animation = 'none'
+        el.style.opacity = '1'
+      }
     },
   })
 

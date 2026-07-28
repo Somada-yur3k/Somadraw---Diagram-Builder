@@ -9,6 +9,14 @@ export const CANVAS_WIDTH = 2400
 export const CANVAS_HEIGHT = 1400
 const MARQUEE_THRESHOLD = 3
 const ZOOM_STEP = 0.1
+const NUDGE_STEP = 1
+const NUDGE_STEP_LARGE = 10
+const NUDGE_DELTAS = {
+  ArrowUp: { dx: 0, dy: -1 },
+  ArrowDown: { dx: 0, dy: 1 },
+  ArrowLeft: { dx: -1, dy: 0 },
+  ArrowRight: { dx: 1, dy: 0 },
+}
 
 function shapeRect(shape) {
   return {
@@ -52,7 +60,7 @@ function CursorMarker({ x, y, email, color, zoom }) {
 // component's own internal canvasRef, so the export code can read the live
 // canvas without EditorCanvas needing to know anything about exporting.
 function EditorCanvas({ canvasNodeRef }) {
-  const { state, dispatch, cursors, updateCursor, clearCursor } = useDiagramEditorContext()
+  const { state, dispatch, readOnly, cursors, updateCursor, clearCursor } = useDiagramEditorContext()
   const zoom = state.viewport.zoom
   const wrapperRef = useRef(null)
   const canvasRef = useRef(null)
@@ -117,10 +125,29 @@ function EditorCanvas({ canvasNodeRef }) {
         event.preventDefault()
         dispatch({ type: 'PASTE' })
       }
+      // Nudge the selected shape(s) - Shift for the larger 10px step, plain
+      // arrow for 1px, matching the usual design-tool convention. Dispatched
+      // as its own MOVE_SHAPE(s)-then-DRAG_END pair (not left mid-gesture)
+      // so each key press becomes its own undo step, the same as releasing
+      // a mouse drag would - MOVE_SHAPE is a "continuous" action (see
+      // historyReducer's CONTINUOUS_TYPES), and leaving it dangling without
+      // a DRAG_END would stick `isDragging` true forever, which blocks
+      // undo/redo and the debounced DB save indefinitely.
+      if (NUDGE_DELTAS[event.key] && !readOnly && state.selection?.kind === 'shape') {
+        event.preventDefault()
+        const step = event.shiftKey ? NUDGE_STEP_LARGE : NUDGE_STEP
+        const { dx, dy } = NUDGE_DELTAS[event.key]
+        for (const id of state.selection.ids) {
+          const shape = state.shapes[id]
+          if (!shape) continue
+          dispatch({ type: 'MOVE_SHAPE', id, x: shape.x + dx * step, y: shape.y + dy * step })
+        }
+        dispatch({ type: 'DRAG_END' })
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [state.selection, state.pendingArrowSourceId, dispatch])
+  }, [state.selection, state.pendingArrowSourceId, state.shapes, readOnly, dispatch])
 
   // Native (not JSX onWheel) so preventDefault reliably stops page-zoom -
   // matches this file's existing native window keydown listener precedent.
