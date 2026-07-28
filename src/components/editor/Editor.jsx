@@ -4,7 +4,6 @@ import { DiagramEditorContext } from './DiagramEditorContext'
 import EditorSidebar from './EditorSidebar'
 import EditorTopbar from './EditorTopbar'
 import EditorCanvas from './EditorCanvas'
-import EditorExportPanel from './EditorExportPanel'
 import ShareButton from './ShareButton'
 import ActiveUsersStack from './ActiveUsersStack'
 
@@ -54,7 +53,9 @@ function Editor({ diagramId, initialData, diagramName, role = 'owner', email, na
         <div className="relative flex min-w-0 flex-1 flex-col">
           <EditorCanvas canvasNodeRef={canvasNodeRef} />
           <EditorTopbar />
-          <EditorExportPanel canvasRef={canvasNodeRef} />
+          {/* PDF export hidden for now - EditorExportPanel.jsx/pdfExport.js
+              are untouched, just not mounted, so this is a one-line revert
+              when it's ready to come back. */}
           <div className="fixed right-4 bottom-4 z-20 flex items-center gap-2">
             <ActiveUsersStack />
             {role === 'owner' && <ShareButton />}
