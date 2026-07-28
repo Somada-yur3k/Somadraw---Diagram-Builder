@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
+import { getDisplayUser } from '../lib/userDisplay'
 import LoadingScreen from './LoadingScreen'
 import Editor from './editor/Editor'
 
@@ -10,6 +11,8 @@ import Editor from './editor/Editor'
 function DiagramWorkspace() {
   const { diagramId } = useParams()
   const navigate = useNavigate()
+  const { user } = useOutletContext()
+  const { name, email, picture } = getDisplayUser(user)
   // Tagged with the diagramId it was fetched for, so "loading" is a derived
   // value (result missing, or stale from a previous id) rather than a
   // separate piece of state that has to be reset by calling setState
@@ -18,14 +21,16 @@ function DiagramWorkspace() {
 
   useEffect(() => {
     let cancelled = false
+    // join_shared_diagram (see supabase/schema.sql) replaces a plain
+    // select() here - it transparently handles all three cases (owner,
+    // already-a-collaborator, brand-new joiner via a share link) and
+    // returns each one's current role along with the diagram, without this
+    // component needing to know which case applies up front.
     supabase
-      .from('diagrams')
-      .select('data, name')
-      .eq('id', diagramId)
-      .maybeSingle()
+      .rpc('join_shared_diagram', { p_diagram_id: diagramId })
       .then(({ data, error }) => {
         if (cancelled) return
-        setResult({ diagramId, diagram: error ? null : data })
+        setResult({ diagramId, diagram: error ? null : (data?.[0] ?? null) })
       })
     return () => {
       cancelled = true
@@ -55,6 +60,10 @@ function DiagramWorkspace() {
       diagramId={diagramId}
       initialData={result.diagram.data}
       diagramName={result.diagram.name}
+      role={result.diagram.role}
+      email={email}
+      name={name}
+      picture={picture}
     />
   )
 }

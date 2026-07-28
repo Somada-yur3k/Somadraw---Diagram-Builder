@@ -408,15 +408,44 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
   )
 }
 
+// A remote patch replaces shape state wholesale (see APPLY_REMOTE_STATE in
+// historyReducer.js), so a collaborator moving/resizing/rotating a shape
+// otherwise makes it jump straight to its new position/size/angle each time
+// a throttled broadcast arrives - visibly stepped rather than smooth. This
+// animates those changes instead. It has to stay off while *this* shape is
+// part of *this tab's* own active drag/resize/rotate gesture though, or
+// local dragging would lag behind the mouse waiting for the transition to
+// catch up - see isLocallyDragging below for how that's told apart.
+const REMOTE_TRANSITION_MS = 120
+const POSITION_TRANSITION = {
+  transitionProperty: 'left, top, width, height',
+  transitionDuration: `${REMOTE_TRANSITION_MS}ms`,
+  transitionTimingFunction: 'linear',
+}
+const ROTATION_TRANSITION = {
+  transitionProperty: 'transform',
+  transitionDuration: `${REMOTE_TRANSITION_MS}ms`,
+  transitionTimingFunction: 'linear',
+}
+
 function Shape({ shape, zoom }) {
-  const { state, dispatch } = useDiagramEditorContext()
+  const { state, dispatch, readOnly, isDragging } = useDiagramEditorContext()
   const isSelected =
     state.selection?.kind === 'shape' && state.selection.ids.includes(shape.id)
+  // A drag/resize/rotate gesture always operates on exactly the current
+  // selection (see handlePointerDown below), so "selected while a local
+  // gesture is in flight" is equivalent to "this specific shape is one of
+  // the ones I'm moving right now" - no extra state needed to track it.
+  const isLocallyDragging = isSelected && isDragging
   const isPendingArrowSource = state.pendingArrowSourceId === shape.id
   const isArrowTool = state.tool === 'arrow'
   const isConnectHover = state.hoveredShapeId === shape.id
+  // A viewer can still select a shape (harmless, purely local) but never
+  // drag/resize/rotate it - handles that would silently do nothing on drag
+  // are worse than no handles at all, so they don't render rather than
+  // rendering disabled.
   const showHandles =
-    isSelected && state.tool === 'select' && state.selection.ids.length === 1
+    isSelected && state.tool === 'select' && state.selection.ids.length === 1 && !readOnly
   // Keeps the selection ring / connect-hover glow's own corners matching
   // ShapeBody's, whether the shape is still on its type's own default radius
   // or the user has customized it - otherwise a never-touched Process shape
@@ -458,6 +487,12 @@ function Shape({ shape, zoom }) {
       dispatch({ type: 'SELECT', kind: 'shape', ids: [shape.id] })
     }
     const idsToTrack = isPartOfGroup ? state.selection.ids : [shape.id]
+
+    // Selection above still applies for a viewer - only the drag session
+    // itself is skipped, so the shape doesn't visually "try to follow the
+    // cursor" for a MOVE_SHAPE that guardedDispatch would silently drop
+    // anyway (see useDiagramEditor.js).
+    if (readOnly) return
 
     event.currentTarget.setPointerCapture(event.pointerId)
     dragRef.current = {
@@ -515,12 +550,21 @@ function Shape({ shape, zoom }) {
       onPointerMove={handlePointerMove}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
-      className={`absolute select-none ${isSelected ? 'z-10' : 'z-0'} ${isBoundary ? 'pointer-events-none' : ''}`}
-      style={{ left: shape.x, top: shape.y, width: shape.width, height: shape.height }}
+      className={`absolute select-none animate-shape-enter ${isSelected ? 'z-10' : 'z-0'} ${isBoundary ? 'pointer-events-none' : ''}`}
+      style={{
+        left: shape.x,
+        top: shape.y,
+        width: shape.width,
+        height: shape.height,
+        ...(isLocallyDragging ? null : POSITION_TRANSITION),
+      }}
     >
       <div
         className="relative h-full w-full"
-        style={{ transform: `rotate(${shape.rotation ?? 0}deg)` }}
+        style={{
+          transform: `rotate(${shape.rotation ?? 0}deg)`,
+          ...(isLocallyDragging ? null : ROTATION_TRANSITION),
+        }}
       >
         <div
           className={`h-full w-full transition-shadow ${
@@ -540,7 +584,11 @@ function Shape({ shape, zoom }) {
               : null),
           }}
         >
-          <ShapeBody shape={shape} dispatch={dispatch} disableDblClick={state.tool !== 'select'} />
+          <ShapeBody
+            shape={shape}
+            dispatch={dispatch}
+            disableDblClick={state.tool !== 'select' || readOnly}
+          />
         </div>
         {isBoundary && (
           <>

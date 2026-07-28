@@ -134,7 +134,7 @@ function SaveStatus({ status }) {
 }
 
 function EditorTopbar() {
-  const { state, dispatch, canUndo, canRedo, saveStatus } = useDiagramEditorContext()
+  const { state, dispatch, canUndo, canRedo, saveStatus, readOnly } = useDiagramEditorContext()
   const zoom = state.viewport.zoom
   const colorInputRef = useRef(null)
   const [visible, setVisible] = useState(true)
@@ -328,7 +328,7 @@ function EditorTopbar() {
       <div className="flex flex-col items-center gap-2 sm:max-w-full sm:min-w-0 sm:flex-row">
         {visible && (
           <div className="flex max-h-[70vh] flex-col items-center gap-1.5 overflow-y-auto rounded-2xl border border-line bg-white px-2 py-2.5 shadow-lg sm:max-h-none sm:min-w-0 sm:flex-row sm:flex-nowrap sm:overflow-x-auto sm:overflow-y-visible sm:rounded-full sm:px-2.5 sm:py-2">
-            {formatTarget && (
+            {formatTarget && !readOnly && (
               <>
                 <select
                   value={formatTarget.fontFamily ?? DEFAULT_FONT_ID}
@@ -565,25 +565,29 @@ function EditorTopbar() {
               {state.showGrid ? 'Hide grid' : 'Show grid'}
             </button>
 
-            <span className="my-1 h-px w-8 shrink-0 bg-line sm:mx-1 sm:my-0 sm:h-5 sm:w-px" />
+            {!readOnly && (
+              <>
+                <span className="my-1 h-px w-8 shrink-0 bg-line sm:mx-1 sm:my-0 sm:h-5 sm:w-px" />
 
-            <button
-              type="button"
-              onClick={() => dispatch({ type: 'DELETE_SELECTED' })}
-              disabled={!state.selection}
-              title="Delete selected"
-              className="shrink-0 whitespace-nowrap rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-surface-soft disabled:pointer-events-none disabled:opacity-40"
-            >
-              Delete
-            </button>
-            <button
-              type="button"
-              onClick={requestClear}
-              title="Clear canvas"
-              className="shrink-0 whitespace-nowrap rounded-lg border border-rose-200 px-2.5 py-1.5 text-[13px] font-medium text-rose-600 transition-colors hover:bg-rose-50"
-            >
-              Clear
-            </button>
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'DELETE_SELECTED' })}
+                  disabled={!state.selection}
+                  title="Delete selected"
+                  className="shrink-0 whitespace-nowrap rounded-lg border border-line px-2.5 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-surface-soft disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={requestClear}
+                  title="Clear canvas"
+                  className="shrink-0 whitespace-nowrap rounded-lg border border-rose-200 px-2.5 py-1.5 text-[13px] font-medium text-rose-600 transition-colors hover:bg-rose-50"
+                >
+                  Clear
+                </button>
+              </>
+            )}
 
             <SaveStatus status={saveStatus} />
           </div>

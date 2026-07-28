@@ -237,7 +237,7 @@ function SignOutConfirmDialog({ onCancel, onConfirm }) {
   )
 }
 
-function DiagramListItem({ diagram, isActive, onOpen, onRename, onDelete }) {
+function DiagramListItem({ diagram, isActive, isOwner, onOpen, onRename, onDelete }) {
   const [renaming, setRenaming] = useState(false)
   const [draftName, setDraftName] = useState(diagram.name)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -279,24 +279,34 @@ function DiagramListItem({ diagram, isActive, onOpen, onRename, onDelete }) {
         <p className="truncate font-medium">{diagram.name}</p>
         <p className="truncate text-[11.5px] text-soft">{formatRelativeTime(diagram.updated_at)}</p>
       </button>
-      <button
-        type="button"
-        onClick={() => setRenaming(true)}
-        title="Rename"
-        aria-label="Rename diagram"
-        className="hidden h-6 w-6 shrink-0 items-center justify-center rounded text-soft hover:bg-white hover:text-ink group-hover:flex"
-      >
-        <PencilIcon />
-      </button>
-      <button
-        type="button"
-        onClick={() => setConfirmingDelete(true)}
-        title="Delete"
-        aria-label="Delete diagram"
-        className="hidden h-6 w-6 shrink-0 items-center justify-center rounded text-soft hover:bg-white hover:text-rose-500 group-hover:flex"
-      >
-        <TrashIcon />
-      </button>
+      {/* A diagram shared with this user (not owned by them) can now show up
+          in this same list, via diagrams' "select shared diagrams" RLS
+          policy - rename/delete only ever succeed for the owner (RLS has no
+          update/delete policy for a collaborator), so hiding these for
+          anyone else avoids a control that looks clickable but silently
+          fails. */}
+      {isOwner && (
+        <>
+          <button
+            type="button"
+            onClick={() => setRenaming(true)}
+            title="Rename"
+            aria-label="Rename diagram"
+            className="hidden h-6 w-6 shrink-0 items-center justify-center rounded text-soft hover:bg-white hover:text-ink group-hover:flex"
+          >
+            <PencilIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            title="Delete"
+            aria-label="Delete diagram"
+            className="hidden h-6 w-6 shrink-0 items-center justify-center rounded text-soft hover:bg-white hover:text-rose-500 group-hover:flex"
+          >
+            <TrashIcon />
+          </button>
+        </>
+      )}
 
       {confirmingDelete && (
         <DeleteDiagramDialog
@@ -410,6 +420,7 @@ function SidebarBody({
               key={diagram.id}
               diagram={diagram}
               isActive={diagram.id === activeDiagramId}
+              isOwner={diagram.user_id === user?.id}
               onOpen={() => onOpenDiagram(diagram.id)}
               onRename={(name) => onRenameDiagram(diagram.id, name)}
               onDelete={() => onDeleteDiagram(diagram.id)}
@@ -511,9 +522,14 @@ function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobile
   const activeDiagramId = diagramIdMatch ? diagramIdMatch[1] : null
 
   function fetchDiagrams() {
+    // user_id is fetched (not just for the owner's own rows, which never
+    // needed it before) so DiagramListItem can tell an owned diagram apart
+    // from one merely shared with this user - both now come back from the
+    // same query, since diagrams' RLS grants select access for either
+    // reason.
     return supabase
       .from('diagrams')
-      .select('id, name, updated_at')
+      .select('id, name, updated_at, user_id')
       .order('updated_at', { ascending: false })
   }
 

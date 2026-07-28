@@ -23,12 +23,36 @@ function rectsIntersect(a, b) {
   return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom)
 }
 
+// A collaborator's live pointer. Positioned in logical/diagram coordinates
+// (like Shape, so the parent canvas div's `scale(zoom)` transform places it
+// correctly), but counter-scaled by 1/zoom so the marker and label stay a
+// constant, legible on-screen size instead of shrinking to a speck at low
+// zoom or ballooning at high zoom.
+function CursorMarker({ x, y, email, color, zoom }) {
+  return (
+    <div
+      className="pointer-events-none absolute z-40 flex items-center gap-1"
+      style={{ left: x, top: y, transform: `scale(${1 / zoom})`, transformOrigin: 'top left' }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill={color} stroke="white" strokeWidth="1.5" className="shrink-0">
+        <path d="M4 3 L20 12 L12.5 13.5 L9.5 20.5 Z" />
+      </svg>
+      <span
+        className="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium text-white shadow-sm"
+        style={{ backgroundColor: color }}
+      >
+        {email}
+      </span>
+    </div>
+  )
+}
+
 // canvasNodeRef is optional - when passed (by Editor.jsx, for the PDF
 // export panel), it's kept pointed at the same DOM node as this
 // component's own internal canvasRef, so the export code can read the live
 // canvas without EditorCanvas needing to know anything about exporting.
 function EditorCanvas({ canvasNodeRef }) {
-  const { state, dispatch } = useDiagramEditorContext()
+  const { state, dispatch, cursors, updateCursor, clearCursor } = useDiagramEditorContext()
   const zoom = state.viewport.zoom
   const wrapperRef = useRef(null)
   const canvasRef = useRef(null)
@@ -171,6 +195,7 @@ function EditorCanvas({ canvasNodeRef }) {
     if (hoveredId !== state.hoveredShapeId) {
       dispatch({ type: 'SET_HOVERED_SHAPE', shapeId: hoveredId })
     }
+    updateCursor(hoverPoint.x, hoverPoint.y)
 
     const drag = marqueeDragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -236,6 +261,7 @@ function EditorCanvas({ canvasNodeRef }) {
           onPointerMove={handleCanvasPointerMove}
           onPointerUp={endMarquee}
           onPointerCancel={endMarquee}
+          onPointerLeave={clearCursor}
           className="relative"
           style={{
             width: CANVAS_WIDTH,
@@ -257,6 +283,16 @@ function EditorCanvas({ canvasNodeRef }) {
             <Shape key={id} shape={state.shapes[id]} zoom={zoom} />
           ))}
           <ArrowLabels />
+          {cursors.map((cursor) => (
+            <CursorMarker
+              key={cursor.clientId}
+              x={cursor.x}
+              y={cursor.y}
+              email={cursor.email}
+              color={cursor.color}
+              zoom={zoom}
+            />
+          ))}
           {marqueeRect && (
             <div
               className="pointer-events-none absolute border border-brand-purple bg-brand-purple/10"

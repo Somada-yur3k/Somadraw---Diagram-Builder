@@ -67,7 +67,7 @@ function DfdMockup() {
         </div>
 
         <div
-          className="relative h-[300px] bg-canvas sm:h-[340px]"
+          className="relative h-75 bg-canvas sm:h-85"
           style={{
             backgroundImage:
               'radial-gradient(circle, #e8e7f1 1px, transparent 1px)',

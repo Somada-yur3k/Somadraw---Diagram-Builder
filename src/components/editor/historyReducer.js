@@ -40,6 +40,42 @@ export function initHistory(present) {
 // see the design notes in Phase 4 of the editor plan for why that matters.
 export function createHistoryReducer(contentReducer) {
   return function historyReducer(history, action) {
+    // A collaborator's content, applied live over the diagram's realtime
+    // channel (see useDiagramChannel) - deliberately doesn't touch past/future
+    // or isDragging. Folding a remote peer's edit into *your own* undo stack
+    // would let your Ctrl+Z revert someone else's change out from under
+    // them; instead it just updates what you're looking at, and your own
+    // undo history stays exclusively a record of your own actions.
+    if (action.type === 'APPLY_REMOTE_STATE') {
+      const { patch } = action
+      if (!history.isDragging) {
+        return { ...history, present: { ...history.present, ...patch } }
+      }
+
+      // Mid a local drag/resize/rotate. A remote snapshot reflects the
+      // *sender's* last-known copy of whatever's selected here - which
+      // predates whatever this gesture is doing to it (that hasn't reached
+      // them yet). Applying it wholesale would yank the shape/arrow being
+      // dragged back to a stale position out from under the user's own
+      // cursor mid-gesture. Keep this client's own in-flight copy of
+      // exactly what's selected; everything else in the patch - including
+      // brand new shapes/arrows the sender just added - still applies
+      // immediately.
+      const present = history.present
+      const selection = present.selection
+      const next = { ...present, ...patch }
+      if (selection?.kind === 'shape' && patch.shapes) {
+        next.shapes = { ...patch.shapes }
+        for (const id of selection.ids) {
+          if (present.shapes[id]) next.shapes[id] = present.shapes[id]
+        }
+      } else if (selection?.kind === 'arrow' && patch.arrows) {
+        next.arrows = { ...patch.arrows }
+        if (present.arrows[selection.id]) next.arrows[selection.id] = present.arrows[selection.id]
+      }
+      return { ...history, present: next }
+    }
+
     if (action.type === 'UNDO') {
       if (history.isDragging || history.past.length === 0) return history
       const previous = history.past[history.past.length - 1]

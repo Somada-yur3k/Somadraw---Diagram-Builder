@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import { createHistoryReducer, initHistory } from './historyReducer'
 import { facingSide, isMidSegmentEligible, pickSpacedT } from './arrowRouting'
 import { clampFontSize, patchDiffers } from './textFormat'
 import { DEFAULT_CORNER_RADIUS_BY_TYPE, clampCornerRadius, DEFAULT_FILL_COLOR_BY_TYPE } from './shapeStyle'
 import { supabase } from '../../lib/supabaseClient'
+import { useDiagramChannel } from '../../lib/useDiagramChannel'
 
 const SAVE_DEBOUNCE_MS = 500
 // Pixel offset applied to each pasted shape, relative to what was copied -
@@ -628,6 +629,28 @@ function reducer(state, action) {
 
 const historyReducer = createHistoryReducer(reducer)
 
+// Action types a read-only (viewer-role) collaborator may still dispatch -
+// pure navigation/selection/local-view state, never diagram content. Every
+// other action type is silently dropped for a viewer, regardless of where
+// the dispatch call originated - this is the single enforcement point (see
+// guardedDispatch below), deliberately not scattered as per-button
+// `disabled` checks across the sidebar/topbar/canvas, since e.g.
+// EditorCanvas's global keydown listener (Delete, Ctrl+V) dispatches
+// mutating actions too and would bypass button-level-only gating.
+const READ_ONLY_ALLOWED_ACTIONS = new Set([
+  'SET_TOOL',
+  'SELECT',
+  'TOGGLE_SHAPE_SELECTION',
+  'DESELECT',
+  'SET_ZOOM',
+  'SET_HOVERED_SHAPE',
+  'CANCEL_PENDING_ARROW',
+  'TOGGLE_GRID',
+  'UNDO',
+  'REDO',
+  'DRAG_END',
+])
+
 function extractPersisted(state) {
   return {
     shapes: state.shapes,
@@ -639,12 +662,31 @@ function extractPersisted(state) {
   }
 }
 
-export function useDiagramEditor(diagramId, initialData) {
-  const [history, dispatch] = useReducer(historyReducer, undefined, () =>
+export function useDiagramEditor(diagramId, initialData, role = 'owner', email, name, picture) {
+  const readOnly = role === 'viewer'
+  const [history, rawDispatch] = useReducer(historyReducer, undefined, () =>
     initHistory(initState(initialData)),
   )
   const state = history.present
+  // True for exactly as long as this tab is mid a local continuous gesture
+  // (drag/resize/rotate) - see historyReducer's CONTINUOUS_TYPES. Used below
+  // to hold off the DB save until the shape is actually dropped, and by
+  // Shape.jsx to tell "I'm moving this right now" apart from a remote
+  // update.
+  const isDragging = history.isDragging
   const [saveStatus, setSaveStatus] = useState('saved')
+
+  // The actual permission boundary - see READ_ONLY_ALLOWED_ACTIONS above.
+  // Wrapping here (rather than exporting rawDispatch) means every caller
+  // downstream keeps calling a value named `dispatch` exactly as before;
+  // no call site elsewhere needs to know a viewer even exists.
+  const dispatch = useCallback(
+    (action) => {
+      if (readOnly && !READ_ONLY_ALLOWED_ACTIONS.has(action.type)) return
+      rawDispatch(action)
+    },
+    [readOnly],
+  )
 
   // Mirrors the latest state into a ref so the debounce timer/unmount-flush
   // below always save the most current content, not whatever was captured
@@ -654,6 +696,130 @@ export function useDiagramEditor(diagramId, initialData) {
   useEffect(() => {
     stateRef.current = state
   })
+
+  // Set right before applying an incoming remote patch so the broadcast
+  // effect below can tell "this content change is an echo of what a
+  // collaborator just sent us" apart from "this is a genuinely new local
+  // edit" - without it, applying a remote patch would itself change
+  // state.shapes/etc, which would trigger the same effect to broadcast that
+  // same content straight back out, and a two-person session would ping-pong
+  // the same snapshot back and forth forever.
+  const suppressNextBroadcastRef = useRef(false)
+  const applyRemoteState = useCallback((patch) => {
+    suppressNextBroadcastRef.current = true
+    rawDispatch({ type: 'APPLY_REMOTE_STATE', patch })
+  }, [])
+  const { broadcastState, cursors, activeUsers, updateCursor, clearCursor } = useDiagramChannel(
+    diagramId,
+    email,
+    name,
+    picture,
+    applyRemoteState,
+  )
+
+  // Belt-and-suspenders alongside useDiagramChannel's own reconnect-on-
+  // return: whatever the exact reason a backgrounded tab's live view drifts
+  // (a dropped realtime connection being the likely one - see
+  // useDiagramChannel), this re-syncs straight from the DB row - the
+  // durable source of truth regardless of what the realtime channel did or
+  // didn't deliver while this tab wasn't in front. Cheap (one row, only on
+  // return-to-tab, not polled), and makes correctness independent of
+  // getting the realtime diagnosis exactly right.
+  useEffect(() => {
+    if (!diagramId) return
+    const refetch = () => {
+      if (document.visibilityState !== 'visible') return
+      supabase
+        .from('diagrams')
+        .select('data')
+        .eq('id', diagramId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.data) applyRemoteState(data.data)
+        })
+    }
+    document.addEventListener('visibilitychange', refetch)
+    window.addEventListener('focus', refetch)
+    return () => {
+      document.removeEventListener('visibilitychange', refetch)
+      window.removeEventListener('focus', refetch)
+    }
+  }, [diagramId, applyRemoteState])
+
+  // A drag dispatches MOVE_SHAPE on every single pointermove - without this,
+  // that meant one full-document broadcast per pointermove tick (30-60/sec
+  // during a fast drag). Throttled here to leading-edge-immediate (so the
+  // very first move of a gesture shows up instantly) plus a trailing timer
+  // that always flushes the *latest* queued payload once the window closes -
+  // never just dropped, or the shape's true final position could sit un-sent
+  // until the next unrelated edit.
+  const BROADCAST_THROTTLE_MS = 50
+  const broadcastThrottleRef = useRef({ lastSentAt: 0, timer: null, pending: null })
+  const scheduleBroadcast = useCallback(
+    (payload) => {
+      const throttle = broadcastThrottleRef.current
+      const elapsed = Date.now() - throttle.lastSentAt
+      if (elapsed >= BROADCAST_THROTTLE_MS) {
+        throttle.lastSentAt = Date.now()
+        broadcastState(payload)
+        return
+      }
+      throttle.pending = payload
+      if (throttle.timer) return
+      throttle.timer = setTimeout(() => {
+        throttle.timer = null
+        throttle.lastSentAt = Date.now()
+        broadcastState(throttle.pending)
+        throttle.pending = null
+      }, BROADCAST_THROTTLE_MS - elapsed)
+    },
+    [broadcastState],
+  )
+  useEffect(() => {
+    const throttle = broadcastThrottleRef.current
+    return () => {
+      if (throttle.timer) clearTimeout(throttle.timer)
+    }
+  }, [])
+
+  // Live view sync - unlike the debounced DB save below, this fires
+  // immediately (well, throttled - see scheduleBroadcast) on every content
+  // change so collaborators see edits as they happen, not up to 500ms later.
+  // Viewers never reach here in practice (their dispatch already drops every
+  // action that could change these fields), so `readOnly` is just a
+  // belt-and-suspenders skip, matching the save effect's own guard.
+  //
+  // useLayoutEffect, not useEffect - a MOVE_SHAPE dispatch from a drag still
+  // has to go through the reducer (it's the one place shape mutation logic
+  // lives; duplicating "how MOVE_SHAPE updates a shape" into the pointer
+  // handler just to broadcast a step early would mean two places that have
+  // to stay in sync). But nothing says *this* effect has to wait for
+  // useEffect's post-paint passive-effect scheduling, which is the real
+  // avoidable delay - useLayoutEffect fires synchronously right after React
+  // commits the DOM update, before the browser paints, shaving that wait
+  // off every broadcast without touching where the mutation itself happens.
+  useLayoutEffect(() => {
+    if (suppressNextBroadcastRef.current) {
+      suppressNextBroadcastRef.current = false
+      return
+    }
+    if (readOnly) return
+    scheduleBroadcast(extractPersisted(state))
+    // Deliberately keyed on the individual persisted fields (like the save
+    // effect below), not `state` itself - `state` also changes reference on
+    // purely transient updates (selection, tool, hover), which would
+    // otherwise rebroadcast identical content on every click.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    readOnly,
+    state.shapes,
+    state.shapeOrder,
+    state.arrows,
+    state.arrowOrder,
+    state.counters,
+    state.showGrid,
+    scheduleBroadcast,
+  ])
 
   const saveTimerRef = useRef(null)
   const inFlightRef = useRef(false)
@@ -701,12 +867,37 @@ export function useDiagramEditor(diagramId, initialData) {
   )
 
   useEffect(() => {
+    // A viewer's dispatch is already fully blocked from ever changing these
+    // fields (see READ_ONLY_ALLOWED_ACTIONS), so this effect would never
+    // actually have new content to save - skipping it outright also means a
+    // viewer's client never attempts an update Postgres would reject anyway
+    // (RLS has no update policy for a viewer-role collaborator), which would
+    // otherwise surface as a confusing `saveStatus: 'error'` for someone who
+    // was never supposed to be able to save in the first place.
+    if (readOnly) return
+
+    // Hold off entirely while a drag/resize/rotate is in flight - a long or
+    // fast gesture dispatches MOVE_SHAPE dozens of times, and none of those
+    // intermediate positions are worth writing to the DB, only the one the
+    // user actually drops on. `isDragging` flipping back to false (DRAG_END)
+    // is itself what re-fires this effect and schedules the real save below,
+    // even though the content fields didn't change on that exact dispatch.
+    if (isDragging) {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+      return
+    }
+
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(() => {
       scheduleSave(extractPersisted(stateRef.current))
     }, SAVE_DEBOUNCE_MS)
     return () => clearTimeout(saveTimerRef.current)
   }, [
+    readOnly,
+    isDragging,
     state.shapes,
     state.shapeOrder,
     state.arrows,
@@ -739,5 +930,14 @@ export function useDiagramEditor(diagramId, initialData) {
     canUndo: history.past.length > 0,
     canRedo: history.future.length > 0,
     saveStatus,
+    readOnly,
+    // Shape.jsx uses this, combined with its own selection membership, to
+    // tell "I'm moving this right now, keep it 1:1 with my mouse" apart from
+    // "this position change just arrived from a collaborator, animate it."
+    isDragging,
+    cursors,
+    activeUsers,
+    updateCursor,
+    clearCursor,
   }
 }
