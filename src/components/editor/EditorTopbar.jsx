@@ -340,17 +340,19 @@ function EditorTopbar({ canvasNodeRef }) {
       : '#8b5cf6'
   const fillColorInputRef = useRef(null)
 
+  // One Line style control, shared by shapes and arrows the same way Fill
+  // is above - a shape's borderStyle and an arrow's lineStyle are different
+  // fields (SET_SHAPE_BORDER_STYLE vs SET_ARROW_LINE_STYLE below), but never
+  // both relevant at once. Gated on showShapeBorderControls for a shape (see
+  // that flag's own comment - label excluded) and unconditionally for an
+  // arrow, matching Fill's own gating.
+  const currentLineStyle = selectedShape
+    ? (selectedShape.borderStyle ?? 'solid')
+    : (selectedArrow?.lineStyle ?? 'solid')
+  const showLineStyleControl = Boolean(selectedArrow) || (Boolean(selectedShape) && showShapeBorderControls)
   const lineStyleTriggerRef = useRef(null)
   const lineStylePanelRef = useRef(null)
   const lineStylePopover = usePopoverState(lineStyleTriggerRef, lineStylePanelRef)
-
-  // A shape's own border pattern - same Solid/Dotted choice as an arrow's
-  // line style above, just for SET_SHAPE_BORDER_STYLE instead of
-  // SET_ARROW_LINE_STYLE. Gated by showShapeBorderControls below (label
-  // excluded, see that flag's own comment).
-  const borderStyleTriggerRef = useRef(null)
-  const borderStylePanelRef = useRef(null)
-  const borderStylePopover = usePopoverState(borderStyleTriggerRef, borderStylePanelRef)
 
   // Two tabs, both genuinely functional (not placeholders): Home holds the
   // general canvas actions, Format holds the per-shape/arrow typography
@@ -385,12 +387,17 @@ function EditorTopbar({ canvasNodeRef }) {
   if (selectedShape?.id !== lastCornerShapeId) {
     setLastCornerShapeId(selectedShape?.id)
     cornerPopover.close()
-    borderStylePopover.close()
   }
   const [lastFormatTargetId, setLastFormatTargetId] = useState(formatTarget?.id)
   if (formatTarget?.id !== lastFormatTargetId) {
     setLastFormatTargetId(formatTarget?.id)
     fontSizePopover.close()
+    // Line style is shared by shapes and arrows (see currentLineStyle/
+    // setLineStyle above), so it closes on *any* format-target change -
+    // switching between two arrows, or an arrow and a shape - not just a
+    // shape-to-shape one the way corner radius's own close (above) only
+    // needs to.
+    lineStylePopover.close()
     // Selecting something jumps straight to the Format tab; losing the
     // selection (Escape, Delete, clicking empty canvas) falls back to Home
     // rather than leaving a now-disabled Format tab showing as active. Keyed
@@ -466,16 +473,13 @@ function EditorTopbar({ canvasNodeRef }) {
     input.value = currentFillColor
   }, [currentFillColor])
 
-  const setArrowLineStyle = (lineStyle) => {
-    if (!selectedArrow) return
-    dispatch({ type: 'SET_ARROW_LINE_STYLE', id: selectedArrow.id, lineStyle })
+  const setLineStyle = (lineStyle) => {
+    if (selectedShape) {
+      dispatch({ type: 'SET_SHAPE_BORDER_STYLE', id: selectedShape.id, borderStyle: lineStyle })
+    } else if (selectedArrow) {
+      dispatch({ type: 'SET_ARROW_LINE_STYLE', id: selectedArrow.id, lineStyle })
+    }
     lineStylePopover.close()
-  }
-
-  const setShapeBorderStyle = (borderStyle) => {
-    if (!selectedShape) return
-    dispatch({ type: 'SET_SHAPE_BORDER_STYLE', id: selectedShape.id, borderStyle })
-    borderStylePopover.close()
   }
 
   const divider = <span className="mx-0.5 h-9 w-px shrink-0 self-center bg-line" />
@@ -747,7 +751,7 @@ function EditorTopbar({ canvasNodeRef }) {
               className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-line p-0.5"
             />
 
-            {selectedArrow && (
+            {showLineStyleControl && (
               <>
                 <button
                   ref={lineStyleTriggerRef}
@@ -775,68 +779,27 @@ function EditorTopbar({ canvasNodeRef }) {
                     >
                       <button
                         type="button"
-                        onClick={() => setArrowLineStyle('solid')}
+                        onClick={() => setLineStyle('solid')}
                         className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                          selectedArrow.lineStyle !== 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
+                          currentLineStyle === 'solid' ? 'bg-surface-soft text-ink' : 'text-body'
                         }`}
                       >
                         Solid
                       </button>
                       <button
                         type="button"
-                        onClick={() => setArrowLineStyle('dotted')}
+                        onClick={() => setLineStyle('dashed')}
                         className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                          selectedArrow.lineStyle === 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
+                          currentLineStyle === 'dashed' ? 'bg-surface-soft text-ink' : 'text-body'
                         }`}
                       >
-                        Dotted
-                      </button>
-                    </div>,
-                    document.body,
-                  )}
-              </>
-            )}
-
-            {selectedShape && showShapeBorderControls && (
-              <>
-                <button
-                  ref={borderStyleTriggerRef}
-                  type="button"
-                  onClick={borderStylePopover.toggle}
-                  aria-haspopup="true"
-                  aria-expanded={borderStylePopover.open}
-                  aria-pressed={borderStylePopover.open}
-                  title="Border style"
-                  aria-label="Border style"
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
-                    borderStylePopover.open ? 'bg-surface-soft text-ink' : 'text-body'
-                  }`}
-                >
-                  <LineStyleIcon />
-                </button>
-
-                {borderStylePopover.open &&
-                  borderStylePopover.pos &&
-                  createPortal(
-                    <div
-                      ref={borderStylePanelRef}
-                      className="fixed z-30 w-32 rounded-xl border border-line bg-white p-1 shadow-lg"
-                      style={borderStylePopover.pos}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setShapeBorderStyle('solid')}
-                        className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                          (selectedShape.borderStyle ?? 'solid') !== 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
-                        }`}
-                      >
-                        Solid
+                        Dashed
                       </button>
                       <button
                         type="button"
-                        onClick={() => setShapeBorderStyle('dotted')}
+                        onClick={() => setLineStyle('dotted')}
                         className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                          selectedShape.borderStyle === 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
+                          currentLineStyle === 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
                         }`}
                       >
                         Dotted

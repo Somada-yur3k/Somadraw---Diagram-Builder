@@ -73,6 +73,18 @@ function computeSvgBounds(shapes, shapeOrder) {
 // enough for memo to skip an arrow whose geometry hasn't changed, without
 // needing a custom comparator. The handle-drawing pass below stays in
 // ArrowLayer itself (see its own comment on why).
+// Dashed uses longer segments than dotted so the two actually read as
+// distinct patterns at a glance rather than just "dotted, but different
+// spacing." A shape's own border-style (Shape.jsx) needs no equivalent
+// lookup - 'dashed'/'dotted' are already real CSS border-style keywords the
+// browser renders natively, unlike an SVG stroke which needs an explicit
+// dasharray to draw anything but a solid line.
+function dasharrayForLineStyle(lineStyle) {
+  if (lineStyle === 'dotted') return '6 5'
+  if (lineStyle === 'dashed') return '14 8'
+  return undefined
+}
+
 const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, dispatch }) {
   return (
     <g>
@@ -96,7 +108,7 @@ const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, di
         fill="none"
         stroke={isSelected ? 'var(--color-brand-purple)' : arrow.color || 'var(--color-soft)'}
         strokeWidth={isSelected ? 2 : 1.5}
-        strokeDasharray={arrow.lineStyle === 'dotted' ? '6 5' : undefined}
+        strokeDasharray={dasharrayForLineStyle(arrow.lineStyle)}
         markerEnd={`url(#${isSelected ? 'arrowhead-selected' : 'arrowhead'})`}
         style={{ pointerEvents: 'none' }}
       />
