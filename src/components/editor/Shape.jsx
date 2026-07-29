@@ -395,7 +395,10 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
   }
 
   return (
-    <div className="flex h-full w-full items-center px-1">
+    <div
+      className={`flex h-full w-full items-center ${fill ? 'rounded-md border-2 px-2' : 'px-1'}`}
+      style={{ borderColor: fill || undefined, backgroundColor: fillTint }}
+    >
       <EditableText
         value={shape.text}
         onCommit={commitField('text')}

@@ -6,9 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- crossorigin: without it, this stylesheet still applies visually
+         (the browser loads and renders it fine either way) but JS can't
+         read its cssRules cross-origin - which is exactly what diagram
+         export (diagramExport.js, via html-to-image) needs to do to embed
+         Inter into the exported image/PDF. Without this, that embed step
+         throws internally (caught, non-fatal - export still succeeds off
+         document.fonts.ready as a fallback) instead of just working. -->
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
+      crossorigin="anonymous"
     />
     <title>Somadraw — Draw data flows the way you think</title>
   </head>

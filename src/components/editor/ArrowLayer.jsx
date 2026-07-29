@@ -4,6 +4,11 @@ import { computeArrowRoute, containsPoint, nearestBorderPoint } from './arrowRou
 
 const CANVAS_WIDTH = 2400
 const CANVAS_HEIGHT = 1400
+// Margin kept around the shapes' own bounding box - routing bends
+// (routeMidOffset) and the handle circles/rects can sit a little outside a
+// shape's own edge, so a tight fit would clip those even though every
+// shape itself is fully inside the box.
+const SVG_PADDING = 200
 const HANDLE_RADIUS = 5
 const ROUTE_HANDLE_SIZE = 8
 // Fixed pixel offset (not a fraction of the segment's length) for where the
@@ -20,9 +25,44 @@ const ROUTE_HANDLE_SIZE = 8
 // only needs to be visible somewhere clear of the label.
 const ROUTE_HANDLE_OFFSET = 30
 
+// This SVG's own box has to fully contain wherever the shapes actually are -
+// a fixed 2400x1400 box clips any arrow whose shape was dragged past that
+// edge, even though the shape itself (a plain div, not an SVG) stays
+// visible regardless. Sized and positioned from the shapes' own bounding
+// box every render instead (falling back to the original nominal canvas
+// size when there's nothing to measure yet, e.g. a blank diagram),
+// expanding to cover content in any direction, including negative
+// coordinates - simpler and more robust than leaning on CSS
+// overflow:visible, which every consumer of this SVG (a browser painting it
+// live, or an export library rasterizing it) would otherwise need to honor
+// correctly on its own.
+function computeSvgBounds(shapes, shapeOrder) {
+  if (shapeOrder.length === 0) {
+    return { minX: 0, minY: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT }
+  }
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const id of shapeOrder) {
+    const shape = shapes[id]
+    minX = Math.min(minX, shape.x)
+    minY = Math.min(minY, shape.y)
+    maxX = Math.max(maxX, shape.x + shape.width)
+    maxY = Math.max(maxY, shape.y + shape.height)
+  }
+  return {
+    minX: minX - SVG_PADDING,
+    minY: minY - SVG_PADDING,
+    width: maxX - minX + SVG_PADDING * 2,
+    height: maxY - minY + SVG_PADDING * 2,
+  }
+}
+
 function ArrowLayer() {
   const { state, dispatch } = useDiagramEditorContext()
   const zoom = state.viewport.zoom
+  const svgBounds = computeSvgBounds(state.shapes, state.shapeOrder)
   const svgRef = useRef(null)
   const dragRef = useRef(null)
   const routeDragRef = useRef(null)
@@ -56,9 +96,18 @@ function ArrowLayer() {
   // (independent of connectorType/geometry); every other arrow stays solid.
   const dashArrayFor = (arrow) => (arrow.lineStyle === 'dotted' ? '6 5' : undefined)
 
+  // This SVG's own top-left corner no longer sits at the canvas's (0, 0) -
+  // it's offset to svgBounds.minX/minY (see computeSvgBounds) - so a point
+  // measured relative to *this element's* rect has to be shifted back by
+  // that same offset to land in true canvas-logical space, the coordinate
+  // system shape.x/shape.y (and everything derived from them, like
+  // findShapeIdAtPoint below) are actually expressed in.
   const toLogicalPoint = (clientX, clientY) => {
     const rect = svgRef.current.getBoundingClientRect()
-    return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom }
+    return {
+      x: (clientX - rect.left) / zoom + svgBounds.minX,
+      y: (clientY - rect.top) / zoom + svgBounds.minY,
+    }
   }
 
   // Geometric point-in-rect lookup (same as EditorCanvas's hover tracker),
@@ -176,10 +225,11 @@ function ArrowLayer() {
   return (
     <svg
       ref={svgRef}
-      className="pointer-events-none absolute left-0 top-0 z-20"
-      width={CANVAS_WIDTH}
-      height={CANVAS_HEIGHT}
-      viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
+      className="pointer-events-none absolute z-20"
+      style={{ left: svgBounds.minX, top: svgBounds.minY }}
+      width={svgBounds.width}
+      height={svgBounds.height}
+      viewBox={`${svgBounds.minX} ${svgBounds.minY} ${svgBounds.width} ${svgBounds.height}`}
     >
       <defs>
         <marker id="arrowhead" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
@@ -214,7 +264,7 @@ function ArrowLayer() {
           <path
             d={d}
             fill="none"
-            stroke={isSelected ? 'var(--color-brand-purple)' : 'var(--color-soft)'}
+            stroke={isSelected ? 'var(--color-brand-purple)' : arrow.color || 'var(--color-soft)'}
             strokeWidth={isSelected ? 2 : 1.5}
             strokeDasharray={dashArrayFor(arrow)}
             markerEnd={`url(#${isSelected ? 'arrowhead-selected' : 'arrowhead'})`}

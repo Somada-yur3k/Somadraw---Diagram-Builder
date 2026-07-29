@@ -11,6 +11,15 @@ const SAVE_DEBOUNCE_MS = 500
 // keeps a paste from landing exactly on top of its source, indistinguishable
 // until moved.
 const PASTE_OFFSET = 24
+// localStorage (not the reducer's own state) is the actual clipboard - it's
+// shared across every tab/diagram in this browser, which is what lets
+// Ctrl+C in one diagram and Ctrl+V in a completely different one (open in
+// another tab, or the same tab after switching diagrams) work at all. A
+// diagram's own `state.clipboard` still exists purely so this key gets
+// written on copy (see the effect below) and so repeated Ctrl+V without a
+// fresh copy re-baselines off the just-pasted shapes instead of restacking -
+// it's never read directly for pasting.
+export const CLIPBOARD_STORAGE_KEY = 'somadraw:clipboard'
 
 // The exact shape a brand-new, empty diagram row's `data` column should have -
 // shared with DashboardSidebar's "+ New diagram" insert so there's one source
@@ -73,6 +82,22 @@ export const MAX_ZOOM = 2
 
 function clampZoom(zoom) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
+}
+
+// A shape's position is clamped to non-negative, not just left unbounded -
+// the canvas lives inside a plain scrollable div, and a browser can never
+// scroll a container to a negative offset. A shape dragged past (0, 0)
+// wasn't just "off past an edge" the way positive-direction overflow is
+// (that's still reachable by scrolling further, see EditorCanvas's dynamic
+// grid sizing) - it became permanently invisible and unreachable, with no
+// way to scroll back to it, verify it, or drag it back. Exporting still
+// correctly found and rendered it (diagramExport.js's own clone-normalization
+// doesn't care about this), which is exactly what made the exported PDF
+// look like a different diagram than whatever was actually visible on
+// screen - not a rendering bug, but two different definitions of "where
+// content can be." This keeps them the same definition.
+function clampShapePosition(x, y) {
+  return { x: Math.max(0, x), y: Math.max(0, y) }
 }
 
 // `initialData` is the diagram row's `data` column, already fetched by
@@ -191,8 +216,7 @@ function reducer(state, action) {
       const shape = {
         id,
         type: action.shapeType,
-        x: action.x - size.width / 2,
-        y: action.y - size.height / 2,
+        ...clampShapePosition(action.x - size.width / 2, action.y - size.height / 2),
         width: size.width,
         height: size.height,
         rotation: 0,
@@ -250,12 +274,13 @@ function reducer(state, action) {
     case 'MOVE_SHAPE': {
       const shape = state.shapes[action.id]
       if (!shape) return state
-      if (shape.x === action.x && shape.y === action.y) return state
+      const { x, y } = clampShapePosition(action.x, action.y)
+      if (shape.x === x && shape.y === y) return state
       return {
         ...state,
         shapes: {
           ...state.shapes,
-          [action.id]: { ...shape, x: action.x, y: action.y },
+          [action.id]: { ...shape, x, y },
         },
       }
     }
@@ -263,9 +288,10 @@ function reducer(state, action) {
     case 'RESIZE_SHAPE': {
       const shape = state.shapes[action.id]
       if (!shape) return state
+      const { x, y } = clampShapePosition(action.x, action.y)
       if (
-        shape.x === action.x &&
-        shape.y === action.y &&
+        shape.x === x &&
+        shape.y === y &&
         shape.width === action.width &&
         shape.height === action.height
       ) {
@@ -277,8 +303,8 @@ function reducer(state, action) {
           ...state.shapes,
           [action.id]: {
             ...shape,
-            x: action.x,
-            y: action.y,
+            x,
+            y,
             width: action.width,
             height: action.height,
           },
@@ -508,6 +534,31 @@ function reducer(state, action) {
       }
     }
 
+    // The arrow's own line/stroke color - separate from SET_ARROW_TEXT_FORMAT's
+    // textColor, which only ever colors the label text, never the line itself.
+    case 'SET_ARROW_COLOR': {
+      const arrow = state.arrows[action.id]
+      if (!arrow) return state
+      if ((arrow.color ?? null) === action.color) return state
+      return {
+        ...state,
+        arrows: { ...state.arrows, [action.id]: { ...arrow, color: action.color } },
+      }
+    }
+
+    // Changes an *existing* arrow's dash pattern - distinct from
+    // arrowLineStyle (top of this file), which only sets what style the
+    // *next newly-drawn* arrow starts with.
+    case 'SET_ARROW_LINE_STYLE': {
+      const arrow = state.arrows[action.id]
+      if (!arrow) return state
+      if (arrow.lineStyle === action.lineStyle) return state
+      return {
+        ...state,
+        arrows: { ...state.arrows, [action.id]: { ...arrow, lineStyle: action.lineStyle } },
+      }
+    }
+
     case 'SET_HOVERED_SHAPE': {
       if (state.hoveredShapeId === action.shapeId) return state
       return { ...state, hoveredShapeId: action.shapeId }
@@ -562,7 +613,12 @@ function reducer(state, action) {
     }
 
     case 'PASTE': {
-      const clip = state.clipboard
+      // Read fresh from localStorage at dispatch time (see action.clip in
+      // EditorCanvas's Ctrl+V handler), not this diagram's own
+      // state.clipboard - the whole point is pasting whatever was most
+      // recently copied anywhere, including a different diagram/tab whose
+      // own reducer state this one has no access to.
+      const clip = action.clip
       if (!clip || clip.shapes.length === 0) return state
 
       const idMap = new Map()
@@ -575,8 +631,11 @@ function reducer(state, action) {
       for (const shape of clip.shapes) {
         const id = createId()
         idMap.set(shape.id, id)
-        const x = shape.x + PASTE_OFFSET
-        const y = shape.y + PASTE_OFFSET
+        // clampShapePosition here too, not just MOVE_SHAPE/RESIZE_SHAPE/
+        // ADD_SHAPE - the clipboard can carry a shape copied from a
+        // different diagram (see the comment above on action.clip), whose
+        // own data could predate this clamp existing at all.
+        const { x, y } = clampShapePosition(shape.x + PASTE_OFFSET, shape.y + PASTE_OFFSET)
         shapes[id] = { ...shape, id, x, y }
         pastedShapes.push(shapes[id])
         shapeIds.push(id)
@@ -687,6 +746,21 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
     },
     [readOnly],
   )
+
+  // Publishes every local copy to the shared cross-diagram/cross-tab
+  // clipboard slot (see CLIPBOARD_STORAGE_KEY above) - this is the only
+  // thing that makes Ctrl+C here and Ctrl+V somewhere else work. Wrapped in
+  // try/catch since localStorage can throw (private-browsing quota,
+  // storage disabled) - worst case, copy/paste just stays this-tab-only for
+  // that session, same as before this existed.
+  useEffect(() => {
+    if (!state.clipboard) return
+    try {
+      localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify(state.clipboard))
+    } catch {
+      // Ignored - see comment above.
+    }
+  }, [state.clipboard])
 
   // Mirrors the latest state into a ref so the debounce timer/unmount-flush
   // below always save the most current content, not whatever was captured

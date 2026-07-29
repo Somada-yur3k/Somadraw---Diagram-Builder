@@ -299,16 +299,23 @@ create policy "diagram participants can send presence" on realtime.messages
     )
   );
 
--- Only owner/editor-role collaborators may send shape-edit broadcasts - a
--- viewer's client is never even asked to (enforced in the app once wired
--- up), and this is the server-side backstop if it tried anyway.
-create policy "diagram editors can send broadcast" on realtime.messages
+-- Any participant (owner, editor, or viewer) may send a broadcast message -
+-- this channel carries both content-sync ("state") and live-cursor
+-- ("cursor") broadcasts, and a viewer's cursor needs to reach collaborators
+-- the same as anyone else's. RLS can't cheaply distinguish those two event
+-- names from each other, but it doesn't need to: a viewer's client never
+-- attempts to send a "state" broadcast in the first place (the app's own
+-- readOnly gate prevents that), and even a modified client couldn't persist
+-- anything this way - the diagrams table's own RLS still requires editor
+-- role for any real, durable write. This only controls a live, ephemeral
+-- view, not the record of truth.
+create policy "diagram participants can send broadcast" on realtime.messages
   for insert to authenticated
   with check (
     realtime.messages.extension = 'broadcast'
     and exists (
       select 1 from diagrams d
       where 'diagram:' || d.id::text = (select realtime.topic())
-        and (d.user_id = auth.uid() or diagram_collaborator_role(d.id) = 'editor')
+        and (d.user_id = auth.uid() or diagram_collaborator_role(d.id) is not null)
     )
   );

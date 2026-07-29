@@ -34,7 +34,17 @@ function ActiveUsersStack() {
   if (!activeUsers || activeUsers.length === 0) return null
 
   const self = { email, name, picture }
-  const everyone = [self, ...activeUsers]
+  // Presence is keyed per browser tab, not per account - the same person
+  // signed in twice (two tabs, or a second window) shows up as two separate
+  // presence entries with the same email. Collapse those down to one avatar
+  // each; `self` goes first so a second tab of your own account can never
+  // shadow "you" with a duplicate "them".
+  const seenEmails = new Set()
+  const everyone = [self, ...activeUsers].filter((person) => {
+    if (seenEmails.has(person.email)) return false
+    seenEmails.add(person.email)
+    return true
+  })
   const visible = everyone.slice(0, MAX_VISIBLE)
   const overflow = everyone.length - visible.length
 

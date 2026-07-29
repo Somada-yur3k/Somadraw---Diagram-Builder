@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabaseClient'
 import { usePopoverState } from '../lib/usePopoverState'
 import { createBlankDiagramData } from './editor/useDiagramEditor'
 import { OWNER_EMAIL } from '../lib/ownerEmail'
+import { getDisplayUser } from '../lib/userDisplay'
 
 const SETTINGS_PANEL_WIDTH = 224
 const SETTINGS_PANEL_MARGIN = 16
@@ -195,7 +196,9 @@ function DeleteDiagramDialog({ name, onCancel, onConfirm }) {
   )
 }
 
-function SignOutConfirmDialog({ onCancel, onConfirm }) {
+function SignOutConfirmDialog({ user, onCancel, onConfirm }) {
+  const { name, email, picture } = getDisplayUser(user)
+
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') onCancel()
@@ -211,23 +214,42 @@ function SignOutConfirmDialog({ onCancel, onConfirm }) {
         if (event.target === event.currentTarget) onCancel()
       }}
     >
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
-        <h2 className="text-[16px] font-semibold text-ink">Sign out?</h2>
-        <p className="mt-1.5 text-[13.5px] leading-relaxed text-soft">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-lg">
+        <div className="flex items-center gap-2.5">
+          {picture ? (
+            <img
+              src={picture}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="h-9 w-9 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <span className="gradient-bg flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white">
+              {name[0]?.toUpperCase()}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-[12.5px] font-medium text-ink">{name}</p>
+            <p className="truncate text-[11.5px] text-soft">{email}</p>
+          </div>
+        </div>
+
+        <h2 className="mt-4 text-[14px] font-semibold text-ink">Sign out?</h2>
+        <p className="mt-1 text-[12px] leading-relaxed text-soft">
           You'll need to sign in again to get back to your diagrams.
         </p>
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-line px-3.5 py-2 text-[13.5px] font-medium text-ink transition-colors hover:bg-surface-soft"
+            className="rounded-lg border border-line px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-soft"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-lg bg-rose-600 px-3.5 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-rose-700"
+            className="rounded-lg bg-rose-600 px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-rose-700"
           >
             Sign out
           </button>
@@ -497,6 +519,7 @@ function SidebarBody({
 
         {confirmingSignOut && (
           <SignOutConfirmDialog
+            user={user}
             onCancel={() => setConfirmingSignOut(false)}
             onConfirm={() => {
               setConfirmingSignOut(false)
@@ -590,7 +613,7 @@ function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobile
     <>
       <aside
         className={`hidden shrink-0 border-r border-line bg-white transition-[width] duration-200 md:flex md:flex-col ${
-          collapsed ? 'md:w-[4.5rem]' : 'md:w-64'
+          collapsed ? 'md:w-18' : 'md:w-64'
         }`}
       >
         <SidebarBody

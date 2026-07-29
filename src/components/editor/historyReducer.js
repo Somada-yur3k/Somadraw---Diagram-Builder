@@ -11,6 +11,11 @@ const CONTINUOUS_TYPES = new Set([
   'MOVE_ARROW_LABEL',
   'ROTATE_ARROW_LABEL',
   'SET_ARROW_ROUTE_OFFSET',
+  // The corner-radius slider (EditorTopbar) dispatches this on every drag
+  // tick, same as a mouse-drag dispatches MOVE_SHAPE on every pointermove -
+  // without coalescing, dragging the slider once from 0 to 48 would create
+  // 48 separate undo steps instead of one.
+  'SET_SHAPE_CORNER_RADIUS',
 ])
 
 const MAX_HISTORY = 100

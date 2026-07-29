@@ -4,6 +4,7 @@ import ArrowLayer from './ArrowLayer'
 import ArrowLabels from './ArrowLabels'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { containsPoint } from './arrowRouting'
+import { CLIPBOARD_STORAGE_KEY } from './useDiagramEditor'
 
 export const CANVAS_WIDTH = 2400
 export const CANVAS_HEIGHT = 1400
@@ -39,6 +40,10 @@ function rectsIntersect(a, b) {
 function CursorMarker({ x, y, email, color, zoom }) {
   return (
     <div
+      // Lets diagramExport.js's filter exclude these from an export - a
+      // collaborator's live cursor is exactly the kind of thing that
+      // shouldn't show up as a stray colored arrow in a printout.
+      data-live-cursor
       className="pointer-events-none absolute z-40 flex items-center gap-1"
       style={{ left: x, top: y, transform: `scale(${1 / zoom})`, transformOrigin: 'top left' }}
     >
@@ -123,7 +128,17 @@ function EditorCanvas({ canvasNodeRef }) {
       }
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'v') {
         event.preventDefault()
-        dispatch({ type: 'PASTE' })
+        // Read fresh from the shared clipboard slot at the moment of paste
+        // (not this diagram's own state.clipboard) - this is what lets a
+        // copy made in a different diagram or browser tab paste in here.
+        let clip = null
+        try {
+          const raw = localStorage.getItem(CLIPBOARD_STORAGE_KEY)
+          if (raw) clip = JSON.parse(raw)
+        } catch {
+          clip = null
+        }
+        dispatch({ type: 'PASTE', clip })
       }
       // Nudge the selected shape(s) - Shift for the larger 10px step, plain
       // arrow for 1px, matching the usual design-tool convention. Dispatched

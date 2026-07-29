@@ -51,11 +51,11 @@ function Editor({ diagramId, initialData, diagramName, role = 'owner', email, na
             full width back. */}
         {!readOnly && <EditorSidebar />}
         <div className="relative flex min-w-0 flex-1 flex-col">
+          {/* Docked top nav bar, not a floating pill - own row in normal
+              flow, ahead of the canvas, so it pushes the canvas down instead
+              of overlaying it (see EditorTopbar's own comment). */}
+          <EditorTopbar canvasNodeRef={canvasNodeRef} />
           <EditorCanvas canvasNodeRef={canvasNodeRef} />
-          <EditorTopbar />
-          {/* PDF export hidden for now - EditorExportPanel.jsx/pdfExport.js
-              are untouched, just not mounted, so this is a one-line revert
-              when it's ready to come back. */}
           <div className="fixed right-4 bottom-4 z-20 flex items-center gap-2">
             <ActiveUsersStack />
             {role === 'owner' && <ShareButton />}

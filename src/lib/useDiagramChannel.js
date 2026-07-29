@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
 
 const STATE_EVENT = 'state'
+const CURSOR_EVENT = 'cursor'
 const CURSOR_THROTTLE_MS = 50
 
 // Distinct, legible-on-white hues - picked from, not generated, so nobody
@@ -20,7 +21,7 @@ export function colorForEmail(email) {
 
 // The one Realtime channel for a shared diagram (private, per-diagram topic
 // `diagram:<id>`, gated by the Realtime Authorization policies in
-// schema.sql), carrying both live content sync and live cursors.
+// schema.sql), carrying live content sync, live cursors, and presence.
 //
 // This used to be two separate hooks each calling `supabase.channel()` on
 // the exact same topic string - but the SDK doesn't open two connections
@@ -33,6 +34,19 @@ export function colorForEmail(email) {
 // and/or presence updates silently failed to deliver depending on mount
 // order, which is exactly why shape moves weren't showing up live. One
 // hook, one `supabase.channel()` call, is the fix - not a workaround.
+//
+// Cursor *position* rides Broadcast, not Presence, even though Presence was
+// the simpler first cut - Presence is designed for infrequent identity/
+// state changes (who joined, who left) and gets synced to everyone as a
+// full state diff; Supabase's own guidance is to use Broadcast for anything
+// as frequent as per-pointermove cursor updates, because a rapid stream of
+// `track()` calls can get coalesced/rate-limited server-side in a way a
+// steady stream of `send()` broadcasts isn't. That's what made a cursor
+// go quiet specifically while its owner was actively dragging something -
+// exactly the highest-frequency moment. Presence is kept, but now only for
+// the thing it's actually good at: a one-time "I'm here" on join, which
+// drives `activeUsers` (who's connected at all) and cleans up a stale
+// cursor via the 'leave' event if someone's tab closes mid-drag.
 export function useDiagramChannel(diagramId, email, name, picture, onRemoteState) {
   // `cursors` (position on canvas) vs `activeUsers` (present at all, whether
   // or not they've moved their mouse over the canvas yet) are deliberately
@@ -40,7 +54,7 @@ export function useDiagramChannel(diagramId, email, name, picture, onRemoteState
   // x/y means nowhere sensible to draw one), but ActiveUsersStack wants
   // everyone who's actually here, including someone who joined seconds ago
   // and hasn't moved their mouse yet.
-  const [cursors, setCursors] = useState([])
+  const [cursorsByClientId, setCursorsByClientId] = useState({})
   const [activeUsers, setActiveUsers] = useState([])
   const [clientId] = useState(() => Math.random().toString(36).slice(2))
   const channelRef = useRef(null)
@@ -84,6 +98,25 @@ export function useDiagramChannel(diagramId, email, name, picture, onRemoteState
       .on('broadcast', { event: STATE_EVENT }, ({ payload }) => {
         onRemoteStateRef.current(payload)
       })
+      .on('broadcast', { event: CURSOR_EVENT }, ({ payload }) => {
+        // Presence auto-excludes your own entry (see the 'sync' handler's
+        // `key !== clientId` filter below) - Broadcast doesn't do that for
+        // free, so without this check your own cursor updates would loop
+        // straight back into your own `cursors` list and render your own
+        // pointer on your own screen.
+        if (payload.clientId === clientId) return
+        setCursorsByClientId((current) => {
+          // x/y omitted means "pointer left the canvas" (see clearCursor) -
+          // drop the entry entirely rather than storing a stale position.
+          if (payload.x == null || payload.y == null) {
+            if (!(payload.clientId in current)) return current
+            const next = { ...current }
+            delete next[payload.clientId]
+            return next
+          }
+          return { ...current, [payload.clientId]: payload }
+        })
+      })
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState()
         const others = Object.entries(state)
@@ -91,7 +124,14 @@ export function useDiagramChannel(diagramId, email, name, picture, onRemoteState
           .map(([key, entries]) => entries[0] && { clientId: key, ...entries[0] })
           .filter(Boolean)
         setActiveUsers(others)
-        setCursors(others.filter((c) => c.x != null && c.y != null))
+      })
+      .on('presence', { event: 'leave' }, ({ key }) => {
+        setCursorsByClientId((current) => {
+          if (!(key in current)) return current
+          const next = { ...current }
+          delete next[key]
+          return next
+        })
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') channel.track({ email, name, picture, color })
@@ -101,7 +141,7 @@ export function useDiagramChannel(diagramId, email, name, picture, onRemoteState
     return () => {
       supabase.removeChannel(channel)
       channelRef.current = null
-      setCursors([])
+      setCursorsByClientId({})
       setActiveUsers([])
     }
   }, [diagramId, email, name, picture, clientId, reconnectGeneration])
@@ -115,17 +155,31 @@ export function useDiagramChannel(diagramId, email, name, picture, onRemoteState
       const now = Date.now()
       if (now - lastCursorSentAtRef.current < CURSOR_THROTTLE_MS) return
       lastCursorSentAtRef.current = now
-      channelRef.current?.track({ email, name, picture, color: colorForEmail(email), x, y })
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: CURSOR_EVENT,
+        payload: { clientId, email, name, picture, color: colorForEmail(email), x, y },
+      })
     },
-    [email, name, picture],
+    [clientId, email, name, picture],
   )
 
-  // Pointer left the canvas entirely - re-track with x/y omitted so other
-  // clients' `c.x != null` filter above drops this cursor instead of
-  // leaving it stuck at its last position.
+  // Pointer left the canvas entirely - re-send with x/y omitted so other
+  // clients' handler above drops this cursor instead of leaving it stuck at
+  // its last position.
   const clearCursor = useCallback(() => {
-    channelRef.current?.track({ email, name, picture, color: colorForEmail(email) })
-  }, [email, name, picture])
+    channelRef.current?.send({
+      type: 'broadcast',
+      event: CURSOR_EVENT,
+      payload: { clientId, email, name, picture, color: colorForEmail(email) },
+    })
+  }, [clientId, email, name, picture])
 
-  return { broadcastState, cursors, activeUsers, updateCursor, clearCursor }
+  return {
+    broadcastState,
+    cursors: Object.values(cursorsByClientId),
+    activeUsers,
+    updateCursor,
+    clearCursor,
+  }
 }

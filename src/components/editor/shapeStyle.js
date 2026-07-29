@@ -34,8 +34,9 @@ export function clampCornerRadius(radius) {
 
 // Same idea as corner radius, for each type's current fill/border theme
 // color (currently a fixed Tailwind brand color per type). Label has no
-// border/background at all, so it has no entry - there's nothing for a fill
-// color to visibly change.
+// *default* theme color (it renders with no border/background until a fill
+// is actually chosen - see Shape.jsx), so it has no entry here; the topbar's
+// currentFillColor falls back to a plain purple for it instead.
 export const DEFAULT_FILL_COLOR_BY_TYPE = {
   entity: '#3b82f6',
   process: '#8b5cf6',
