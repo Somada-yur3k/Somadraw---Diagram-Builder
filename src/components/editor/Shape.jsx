@@ -1,5 +1,4 @@
-import { useRef } from 'react'
-import { useDiagramEditorContext } from './DiagramEditorContext'
+import { memo, useRef } from 'react'
 import EditableText from './EditableText'
 import ShapeHandles from './ShapeHandles'
 import { textFormatStyle } from './textFormat'
@@ -34,17 +33,24 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
   // through untouched until the user actually picks a fill color.
   const fill = shape.fillColor
   const fillTint = fill ? `color-mix(in srgb, ${fill} 8%, white)` : undefined
+  // undefined (not 'solid') for the common case, same additive-only
+  // reasoning as cornerStyle - a shape's Tailwind border-2 class already
+  // renders solid on its own, so this only needs to override anything once
+  // the user actually picks dotted.
+  const borderStyleValue =
+    shape.borderStyle && shape.borderStyle !== 'solid' ? shape.borderStyle : undefined
 
   if (shape.type === 'entity') {
     return (
       <div
         className="flex h-full w-full items-center justify-center rounded-lg border-2 border-brand-blue/50 bg-brand-blue/6 px-3"
-        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
       >
         <EditableText
           value={shape.text}
           onCommit={commitField('text')}
           placeholder="Entity"
+          placeholderOnlyWhileEditing
           disableDblClick={disableDblClick}
           className="w-full text-center text-[13px] font-semibold uppercase tracking-wide text-ink"
           style={textStyle}
@@ -57,7 +63,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     return (
       <div
         className="flex h-full w-full flex-col overflow-hidden rounded-2xl border-2 border-brand-purple"
-        style={{ ...cornerStyle, borderColor: fill || undefined }}
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue }}
       >
         <div
           className="flex shrink-0 items-center gap-2 bg-brand-purple px-3 py-1.5"
@@ -82,6 +88,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
             value={shape.text}
             onCommit={commitField('text')}
             placeholder="Process"
+            placeholderOnlyWhileEditing
             disableDblClick={disableDblClick}
             className="w-full text-center text-[14px] font-medium leading-snug text-ink"
             style={textStyle}
@@ -92,27 +99,41 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
   }
 
   if (shape.type === 'store') {
+    // Two-compartment table layout (badge cell | label cell), full border
+    // on all sides plus a vertical divider between them - replaces the old
+    // open-ended (top/bottom border only) Gane-Sarson look with the
+    // fully-boxed style requested from a reference image.
     return (
       <div
-        className="flex h-full w-full items-center gap-2 border-y-2 border-brand-pink/50 bg-brand-pink/6 px-3"
-        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+        className="flex h-full w-full overflow-hidden border-2 border-brand-blue/60"
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue }}
       >
-        <EditableText
-          value={shape.badge}
-          onCommit={commitField('badge')}
-          placeholder="D#"
-          disableDblClick={disableDblClick}
-          className="shrink-0 text-[11px] font-bold text-brand-pink"
-          style={{ color: fill || undefined }}
-        />
-        <EditableText
-          value={shape.text}
-          onCommit={commitField('text')}
-          placeholder="Data store"
-          disableDblClick={disableDblClick}
-          className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-ink"
-          style={textStyle}
-        />
+        <div
+          className="flex w-14 shrink-0 items-center justify-center border-r-2 border-brand-blue/60 bg-brand-blue/10 px-1"
+          style={{ borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
+        >
+          <EditableText
+            value={shape.badge}
+            onCommit={commitField('badge')}
+            placeholder="D#"
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[12px] font-bold leading-none text-ink"
+          />
+        </div>
+        <div
+          className="flex flex-1 items-center justify-center bg-brand-blue/6 px-2"
+          style={{ backgroundColor: fillTint }}
+        >
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="Data store"
+            placeholderOnlyWhileEditing
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[13px] font-medium leading-snug text-ink"
+            style={textStyle}
+          />
+        </div>
       </div>
     )
   }
@@ -121,12 +142,13 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     return (
       <div
         className="flex h-full w-full items-center justify-center rounded-md border-2 border-teal-500/50 bg-teal-500/6 px-3"
-        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
       >
         <EditableText
           value={shape.text}
           onCommit={commitField('text')}
           placeholder="Process"
+          placeholderOnlyWhileEditing
           disableDblClick={disableDblClick}
           className="w-full text-center text-[13px] font-medium text-ink"
           style={textStyle}
@@ -146,6 +168,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
           style={{
             clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
             borderColor: fill || undefined,
+            borderStyle: borderStyleValue,
             backgroundColor: fillTint,
           }}
         />
@@ -154,6 +177,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
             value={shape.text}
             onCommit={commitField('text')}
             placeholder="Decision"
+            placeholderOnlyWhileEditing
             disableDblClick={disableDblClick}
             className="w-full text-center text-[12.5px] font-medium leading-snug text-ink"
             style={textStyle}
@@ -167,12 +191,13 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     return (
       <div
         className="flex h-full w-full items-center justify-center rounded-full border-2 border-slate-500/50 bg-slate-500/6 px-4"
-        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
       >
         <EditableText
           value={shape.text}
           onCommit={commitField('text')}
           placeholder="Start"
+          placeholderOnlyWhileEditing
           disableDblClick={disableDblClick}
           className="w-full text-center text-[13px] font-medium text-ink"
           style={textStyle}
@@ -193,6 +218,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
             ...cornerStyle,
             transform: 'skewX(-12deg)',
             borderColor: fill || undefined,
+            borderStyle: borderStyleValue,
             backgroundColor: fillTint,
           }}
         />
@@ -201,6 +227,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
             value={shape.text}
             onCommit={commitField('text')}
             placeholder="Input/Output"
+            placeholderOnlyWhileEditing
             disableDblClick={disableDblClick}
             className="w-full text-center text-[12.5px] font-medium leading-snug text-ink"
             style={textStyle}
@@ -214,12 +241,13 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     return (
       <div
         className="flex h-full w-full items-center justify-center rounded-full border-2 border-brand-blue/50 bg-brand-blue/6 px-3"
-        style={{ borderColor: fill || undefined, backgroundColor: fillTint }}
+        style={{ borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
       >
         <EditableText
           value={shape.text}
           onCommit={commitField('text')}
           placeholder="Circle"
+          placeholderOnlyWhileEditing
           disableDblClick={disableDblClick}
           className="w-full text-center text-[13px] font-medium text-ink"
           style={textStyle}
@@ -232,12 +260,13 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     return (
       <div
         className="flex h-full w-full items-center justify-center border-2 border-brand-purple/50 bg-brand-purple/6 px-3"
-        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
       >
         <EditableText
           value={shape.text}
           onCommit={commitField('text')}
           placeholder="Square"
+          placeholderOnlyWhileEditing
           disableDblClick={disableDblClick}
           className="w-full text-center text-[13px] font-medium text-ink"
           style={textStyle}
@@ -250,12 +279,13 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     return (
       <div
         className="flex h-full w-full items-center justify-center border-2 border-teal-500/50 bg-teal-500/6 px-3"
-        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
       >
         <EditableText
           value={shape.text}
           onCommit={commitField('text')}
           placeholder="Rectangle"
+          placeholderOnlyWhileEditing
           disableDblClick={disableDblClick}
           className="w-full text-center text-[13px] font-medium text-ink"
           style={textStyle}
@@ -275,6 +305,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
           style={{
             clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)',
             borderColor: fill || undefined,
+            borderStyle: borderStyleValue,
             backgroundColor: fillTint,
           }}
         />
@@ -283,6 +314,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
             value={shape.text}
             onCommit={commitField('text')}
             placeholder="Triangle"
+            placeholderOnlyWhileEditing
             disableDblClick={disableDblClick}
             className="w-full text-center text-[12.5px] font-medium leading-snug text-ink"
             style={textStyle}
@@ -300,6 +332,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
           style={{
             clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
             borderColor: fill || undefined,
+            borderStyle: borderStyleValue,
             backgroundColor: fillTint,
           }}
         />
@@ -308,6 +341,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
             value={shape.text}
             onCommit={commitField('text')}
             placeholder="Diamond"
+            placeholderOnlyWhileEditing
             disableDblClick={disableDblClick}
             className="w-full text-center text-[12.5px] font-medium leading-snug text-ink"
             style={textStyle}
@@ -338,6 +372,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
           value={shape.text}
           onCommit={commitField('text')}
           placeholder="Actor"
+          placeholderOnlyWhileEditing
           disableDblClick={disableDblClick}
           className="w-full text-center text-[12.5px] font-medium text-ink"
           style={textStyle}
@@ -353,12 +388,13 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     return (
       <div
         className="flex h-full w-full items-center justify-center border-2 border-sky-500/50 bg-sky-500/6 px-4"
-        style={{ borderRadius: '50%', borderColor: fill || undefined, backgroundColor: fillTint }}
+        style={{ borderRadius: '50%', borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
       >
         <EditableText
           value={shape.text}
           onCommit={commitField('text')}
           placeholder="Use case"
+          placeholderOnlyWhileEditing
           disableDblClick={disableDblClick}
           className="w-full text-center text-[13px] font-medium text-ink"
           style={textStyle}
@@ -374,7 +410,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     return (
       <div
         className="relative h-full w-full border-2 border-slate-400/60 bg-slate-400/5"
-        style={{ ...cornerStyle, borderColor: fill || undefined, backgroundColor: fillTint }}
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
       >
         {/* pointer-events-auto: the outer Shape wrapper below turns itself
             pointer-events-none for this type so shapes placed inside the
@@ -385,6 +421,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
             value={shape.text}
             onCommit={commitField('text')}
             placeholder="System"
+            placeholderOnlyWhileEditing
             disableDblClick={disableDblClick}
             className="text-[12px] font-semibold text-ink"
             style={textStyle}
@@ -403,6 +440,7 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
         value={shape.text}
         onCommit={commitField('text')}
         placeholder="Text label"
+        placeholderOnlyWhileEditing
         disableDblClick={disableDblClick}
         className="w-full text-[13px] font-medium text-ink"
         style={textStyle}
@@ -431,24 +469,35 @@ const ROTATION_TRANSITION = {
   transitionTimingFunction: 'linear',
 }
 
-function Shape({ shape, zoom }) {
-  const { state, dispatch, readOnly, isDragging } = useDiagramEditorContext()
-  const isSelected =
-    state.selection?.kind === 'shape' && state.selection.ids.includes(shape.id)
-  // A drag/resize/rotate gesture always operates on exactly the current
-  // selection (see handlePointerDown below), so "selected while a local
-  // gesture is in flight" is equivalent to "this specific shape is one of
-  // the ones I'm moving right now" - no extra state needed to track it.
-  const isLocallyDragging = isSelected && isDragging
-  const isPendingArrowSource = state.pendingArrowSourceId === shape.id
-  const isArrowTool = state.tool === 'arrow'
-  const isConnectHover = state.hoveredShapeId === shape.id
-  // A viewer can still select a shape (harmless, purely local) but never
-  // drag/resize/rotate it - handles that would silently do nothing on drag
-  // are worse than no handles at all, so they don't render rather than
-  // rendering disabled.
-  const showHandles =
-    isSelected && state.tool === 'select' && state.selection.ids.length === 1 && !readOnly
+// A canvas with hundreds of shapes dispatches constantly - dragging one
+// shape, typing in one label, even a remote collaborator's cursor moving -
+// and every one of those used to re-render *every* Shape, because this
+// component read the whole editor `state` straight from context (any
+// context consumer re-renders whenever the value it subscribes to changes,
+// regardless of memo on its own props). Shape now takes every piece of
+// state it needs as plain props instead, computed once by EditorCanvas's
+// `.map()`, so wrapping it in memo() actually means something: an unrelated
+// dispatch elsewhere leaves an unaffected shape's props identical (same
+// `shape` object reference per the reducer's own immutable-update pattern,
+// same primitive booleans), and memo skips it entirely. `stateRef` is the
+// one exception - a plain ref (not a reactive prop) holding the latest
+// state, read only inside event handlers (group-drag start positions, see
+// below) so those can see fresh data without themselves forcing a re-render.
+function Shape({
+  shape,
+  zoom,
+  dispatch,
+  readOnly,
+  stateRef,
+  isSelected,
+  isMultiSelected,
+  isLocallyDragging,
+  isPendingArrowSource,
+  isArrowTool,
+  isSelectTool,
+  isConnectHover,
+  showHandles,
+}) {
   // Keeps the selection ring / connect-hover glow's own corners matching
   // ShapeBody's, whether the shape is still on its type's own default radius
   // or the user has customized it - otherwise a never-touched Process shape
@@ -481,15 +530,14 @@ function Shape({ shape, zoom }) {
     // group and skip the replacing SELECT below - dispatching a
     // single-shape SELECT first would destroy the multi-selection that
     // group-drag depends on.
-    const isPartOfGroup =
-      state.selection?.kind === 'shape' &&
-      state.selection.ids.length > 1 &&
-      state.selection.ids.includes(shape.id)
-
-    if (!isPartOfGroup) {
+    if (!isMultiSelected) {
       dispatch({ type: 'SELECT', kind: 'shape', ids: [shape.id] })
     }
-    const idsToTrack = isPartOfGroup ? state.selection.ids : [shape.id]
+    // Read fresh from the ref (not a prop) - the other selected shapes'
+    // current positions are only needed right now, at gesture start, not on
+    // every render, so this doesn't need to be reactive.
+    const currentState = stateRef.current
+    const idsToTrack = isMultiSelected ? currentState.selection.ids : [shape.id]
 
     // Selection above still applies for a viewer - only the drag session
     // itself is skipped, so the shape doesn't visually "try to follow the
@@ -504,8 +552,8 @@ function Shape({ shape, zoom }) {
       startClientY: event.clientY,
       shapes: idsToTrack.map((id) => ({
         id,
-        startX: state.shapes[id].x,
-        startY: state.shapes[id].y,
+        startX: currentState.shapes[id].x,
+        startY: currentState.shapes[id].y,
       })),
     }
   }
@@ -602,7 +650,7 @@ function Shape({ shape, zoom }) {
           <ShapeBody
             shape={shape}
             dispatch={dispatch}
-            disableDblClick={state.tool !== 'select' || readOnly}
+            disableDblClick={!isSelectTool || readOnly}
           />
         </div>
         {isBoundary && (
@@ -640,4 +688,4 @@ function Shape({ shape, zoom }) {
   )
 }
 
-export default Shape
+export default memo(Shape)

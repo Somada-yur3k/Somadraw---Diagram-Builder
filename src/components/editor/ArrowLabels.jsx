@@ -1,16 +1,29 @@
-import { useRef } from 'react'
+import { memo, useRef } from 'react'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import EditableText from './EditableText'
 import { computeArrowRoute } from './arrowRouting'
 import { textFormatStyle } from './textFormat'
 
-function ArrowLabel({ arrow, isSelected, labelAnchor, zoom, dispatch }) {
+// Memoized the same way ArrowLayer's ArrowPathVisual is - `arrow` is a
+// stable reference unless that specific arrow changed, and labelAnchor is
+// passed as two primitive numbers (not an {x, y} object, which would be a
+// fresh reference every ArrowLabels render even when unchanged) so memo's
+// default shallow comparison actually catches the common "nothing about
+// this label changed" case instead of always seeing new props.
+const ArrowLabel = memo(function ArrowLabel({
+  arrow,
+  isSelected,
+  labelAnchorX,
+  labelAnchorY,
+  zoom,
+  dispatch,
+}) {
   const dragRef = useRef(null)
   const rotateRef = useRef(null)
   const labelRef = useRef(null)
 
-  const x = labelAnchor.x + (arrow.labelOffsetX ?? 0)
-  const y = labelAnchor.y + (arrow.labelOffsetY ?? 0)
+  const x = labelAnchorX + (arrow.labelOffsetX ?? 0)
+  const y = labelAnchorY + (arrow.labelOffsetY ?? 0)
   const rotation = arrow.labelRotation ?? 0
 
   const handlePointerDown = (event) => {
@@ -140,7 +153,7 @@ function ArrowLabel({ arrow, isSelected, labelAnchor, zoom, dispatch }) {
       </div>
     </div>
   )
-}
+})
 
 function ArrowLabels() {
   const { state, dispatch } = useDiagramEditorContext()
@@ -176,7 +189,8 @@ function ArrowLabels() {
             key={arrow.id}
             arrow={arrow}
             isSelected={isSelected}
-            labelAnchor={labelAnchor}
+            labelAnchorX={labelAnchor.x}
+            labelAnchorY={labelAnchor.y}
             zoom={zoom}
             dispatch={dispatch}
           />

@@ -311,12 +311,14 @@ function EditorTopbar({ canvasNodeRef }) {
     dispatch({ type: formatActionType, id: formatTarget.id, patch })
   }
 
-  // Corner rounding still only makes sense for the shape types that already
-  // have their own visible border/box - a label's ShapeBody renders one
-  // too, but only once it's actually been given a fill (see Shape.jsx), and
-  // even then keeps a fixed rounding rather than a user-tunable one, to
-  // keep this one scoped to what was actually asked for.
-  const showCornerRadiusControl = Boolean(selectedShape) && selectedShape.type !== 'label'
+  // Corner rounding and border style both only make sense for the shape
+  // types that already have their own visible border/box - a label's
+  // ShapeBody renders one too, but only once it's actually been given a
+  // fill (see Shape.jsx), and even then keeps a fixed rounding/solid border
+  // rather than user-tunable ones, to keep this scoped to what was asked
+  // for. Shared by both controls below rather than one flag each, since
+  // they're gated identically.
+  const showShapeBorderControls = Boolean(selectedShape) && selectedShape.type !== 'label'
   const currentCornerRadius = selectedShape
     ? (selectedShape.cornerRadius ?? DEFAULT_CORNER_RADIUS_BY_TYPE[selectedShape.type] ?? 0)
     : 0
@@ -341,6 +343,14 @@ function EditorTopbar({ canvasNodeRef }) {
   const lineStyleTriggerRef = useRef(null)
   const lineStylePanelRef = useRef(null)
   const lineStylePopover = usePopoverState(lineStyleTriggerRef, lineStylePanelRef)
+
+  // A shape's own border pattern - same Solid/Dotted choice as an arrow's
+  // line style above, just for SET_SHAPE_BORDER_STYLE instead of
+  // SET_ARROW_LINE_STYLE. Gated by showShapeBorderControls below (label
+  // excluded, see that flag's own comment).
+  const borderStyleTriggerRef = useRef(null)
+  const borderStylePanelRef = useRef(null)
+  const borderStylePopover = usePopoverState(borderStyleTriggerRef, borderStylePanelRef)
 
   // Two tabs, both genuinely functional (not placeholders): Home holds the
   // general canvas actions, Format holds the per-shape/arrow typography
@@ -375,6 +385,7 @@ function EditorTopbar({ canvasNodeRef }) {
   if (selectedShape?.id !== lastCornerShapeId) {
     setLastCornerShapeId(selectedShape?.id)
     cornerPopover.close()
+    borderStylePopover.close()
   }
   const [lastFormatTargetId, setLastFormatTargetId] = useState(formatTarget?.id)
   if (formatTarget?.id !== lastFormatTargetId) {
@@ -459,6 +470,12 @@ function EditorTopbar({ canvasNodeRef }) {
     if (!selectedArrow) return
     dispatch({ type: 'SET_ARROW_LINE_STYLE', id: selectedArrow.id, lineStyle })
     lineStylePopover.close()
+  }
+
+  const setShapeBorderStyle = (borderStyle) => {
+    if (!selectedShape) return
+    dispatch({ type: 'SET_SHAPE_BORDER_STYLE', id: selectedShape.id, borderStyle })
+    borderStylePopover.close()
   }
 
   const divider = <span className="mx-0.5 h-9 w-px shrink-0 self-center bg-line" />
@@ -780,6 +797,56 @@ function EditorTopbar({ canvasNodeRef }) {
               </>
             )}
 
+            {selectedShape && showShapeBorderControls && (
+              <>
+                <button
+                  ref={borderStyleTriggerRef}
+                  type="button"
+                  onClick={borderStylePopover.toggle}
+                  aria-haspopup="true"
+                  aria-expanded={borderStylePopover.open}
+                  aria-pressed={borderStylePopover.open}
+                  title="Border style"
+                  aria-label="Border style"
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
+                    borderStylePopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                  }`}
+                >
+                  <LineStyleIcon />
+                </button>
+
+                {borderStylePopover.open &&
+                  borderStylePopover.pos &&
+                  createPortal(
+                    <div
+                      ref={borderStylePanelRef}
+                      className="fixed z-30 w-32 rounded-xl border border-line bg-white p-1 shadow-lg"
+                      style={borderStylePopover.pos}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setShapeBorderStyle('solid')}
+                        className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
+                          (selectedShape.borderStyle ?? 'solid') !== 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
+                        }`}
+                      >
+                        Solid
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShapeBorderStyle('dotted')}
+                        className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
+                          selectedShape.borderStyle === 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
+                        }`}
+                      >
+                        Dotted
+                      </button>
+                    </div>,
+                    document.body,
+                  )}
+              </>
+            )}
+
             <input
               ref={colorInputRef}
               type="color"
@@ -816,7 +883,7 @@ function EditorTopbar({ canvasNodeRef }) {
               </button>
             </div>
 
-            {showCornerRadiusControl && (
+            {showShapeBorderControls && (
               <>
                 <button
                   ref={cornerTriggerRef}

@@ -6,6 +6,7 @@ import EditorTopbar from './EditorTopbar'
 import EditorCanvas from './EditorCanvas'
 import ShareButton from './ShareButton'
 import ActiveUsersStack from './ActiveUsersStack'
+import FloatingShapePreview from './FloatingShapePreview'
 
 function Editor({ diagramId, initialData, diagramName, role = 'owner', email, name, picture }) {
   const {
@@ -50,6 +51,7 @@ function Editor({ diagramId, initialData, diagramName, role = 'owner', email, na
             (rather than rendering it disabled) also gives their canvas the
             full width back. */}
         {!readOnly && <EditorSidebar />}
+        <FloatingShapePreview />
         <div className="relative flex min-w-0 flex-1 flex-col">
           {/* Docked top nav bar, not a floating pill - own row in normal
               flow, ahead of the canvas, so it pushes the canvas down instead

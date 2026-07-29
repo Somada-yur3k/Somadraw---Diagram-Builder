@@ -40,7 +40,7 @@ export function clampCornerRadius(radius) {
 export const DEFAULT_FILL_COLOR_BY_TYPE = {
   entity: '#3b82f6',
   process: '#8b5cf6',
-  store: '#ec4899',
+  store: '#3b82f6',
   flowProcess: '#14b8a6',
   decision: '#f59e0b',
   terminator: '#64748b',

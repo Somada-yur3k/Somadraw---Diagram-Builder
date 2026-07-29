@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { computeArrowRoute, containsPoint, nearestBorderPoint } from './arrowRouting'
 
@@ -59,10 +59,58 @@ function computeSvgBounds(shapes, shapeOrder) {
   }
 }
 
+// A diagram's arrow count multiplies the same way its shape count does (see
+// Shape.jsx's own comment on this), so an unrelated dispatch - dragging one
+// shape, typing a label, a remote cursor moving - used to force every
+// arrow's path to re-render, since they all lived in one un-memoized
+// ArrowLayer render. Split out just the always-visible line (the hit-stroke
+// and the visible stroke) into its own memoized component: `arrow` is a
+// stable object reference unless *that* arrow's own fields changed (same
+// reducer immutable-update pattern shapes rely on), and `d` - a plain
+// string, rebuilt fresh every ArrowLayer render but compared by *value*
+// (`===` on strings is content equality in JS, not reference equality) -
+// comes out byte-identical whenever neither endpoint moved. Together that's
+// enough for memo to skip an arrow whose geometry hasn't changed, without
+// needing a custom comparator. The handle-drawing pass below stays in
+// ArrowLayer itself (see its own comment on why).
+const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, dispatch }) {
+  return (
+    <g>
+      <path
+        d={d}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={14}
+        style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+        onPointerDown={(event) => {
+          event.stopPropagation()
+          dispatch({ type: 'SELECT', kind: 'arrow', id: arrow.id })
+        }}
+        onDoubleClick={(event) => {
+          event.stopPropagation()
+          dispatch({ type: 'RESET_ARROW_ROUTE', id: arrow.id })
+        }}
+      />
+      <path
+        d={d}
+        fill="none"
+        stroke={isSelected ? 'var(--color-brand-purple)' : arrow.color || 'var(--color-soft)'}
+        strokeWidth={isSelected ? 2 : 1.5}
+        strokeDasharray={arrow.lineStyle === 'dotted' ? '6 5' : undefined}
+        markerEnd={`url(#${isSelected ? 'arrowhead-selected' : 'arrowhead'})`}
+        style={{ pointerEvents: 'none' }}
+      />
+    </g>
+  )
+})
+
 function ArrowLayer() {
   const { state, dispatch } = useDiagramEditorContext()
   const zoom = state.viewport.zoom
-  const svgBounds = computeSvgBounds(state.shapes, state.shapeOrder)
+  const svgBounds = useMemo(
+    () => computeSvgBounds(state.shapes, state.shapeOrder),
+    [state.shapes, state.shapeOrder],
+  )
   const svgRef = useRef(null)
   const dragRef = useRef(null)
   const routeDragRef = useRef(null)
@@ -91,10 +139,6 @@ function ArrowLayer() {
     )
     return { arrow, isSelected, d, start, end, midSegment }
   })
-
-  // Short-dash pattern - only arrows with lineStyle 'dotted' use this
-  // (independent of connectorType/geometry); every other arrow stays solid.
-  const dashArrayFor = (arrow) => (arrow.lineStyle === 'dotted' ? '6 5' : undefined)
 
   // This SVG's own top-left corner no longer sits at the canvas's (0, 0) -
   // it's offset to svgBounds.minX/minY (see computeSvgBounds) - so a point
@@ -248,29 +292,7 @@ function ArrowLayer() {
       </defs>
 
       {routedArrows.map(({ arrow, isSelected, d }) => (
-        <g key={arrow.id}>
-          <path
-            d={d}
-            fill="none"
-            stroke="transparent"
-            strokeWidth={14}
-            style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
-            onPointerDown={(event) => {
-              event.stopPropagation()
-              dispatch({ type: 'SELECT', kind: 'arrow', id: arrow.id })
-            }}
-            onDoubleClick={(event) => resetRoute(arrow.id, event)}
-          />
-          <path
-            d={d}
-            fill="none"
-            stroke={isSelected ? 'var(--color-brand-purple)' : arrow.color || 'var(--color-soft)'}
-            strokeWidth={isSelected ? 2 : 1.5}
-            strokeDasharray={dashArrayFor(arrow)}
-            markerEnd={`url(#${isSelected ? 'arrowhead-selected' : 'arrowhead'})`}
-            style={{ pointerEvents: 'none' }}
-          />
-        </g>
+        <ArrowPathVisual key={arrow.id} arrow={arrow} d={d} isSelected={isSelected} dispatch={dispatch} />
       ))}
 
       {/* Rendered as a second, later pass so every handle sits above every
@@ -284,6 +306,13 @@ function ArrowLayer() {
         const showFromHandle = isSelected || isDraggingFrom || state.hoveredShapeId === arrow.fromId
         const showToHandle = isSelected || isDraggingTo || state.hoveredShapeId === arrow.toId
         const showRouteHandle = isSelected && midSegment
+        // Nothing to draw for the vast majority of arrows at any given
+        // moment (only a selected arrow, or one touching the currently
+        // hovered shape, ever shows a handle) - bailing out here instead of
+        // returning an empty <g> skips React's reconciliation work for
+        // those arrows entirely rather than diffing a group with nothing in
+        // it, on every render.
+        if (!showFromHandle && !showToHandle && !showRouteHandle) return null
         const routeCursor = midSegment?.orientation === 'vertical' ? 'ew-resize' : 'ns-resize'
         // The segment is always axis-aligned by construction (vertical:
         // x1===x2, only y varies; horizontal: y1===y2, only x varies), so

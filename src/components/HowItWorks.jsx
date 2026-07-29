@@ -18,9 +18,21 @@ const steps = [
   },
   {
     number: '04',
+    title: 'Collaborate in real time',
+    description:
+      'Share a diagram and edits, cursors, and selections sync live to everyone in it — no refresh, no version conflicts.',
+  },
+  {
+    number: '05',
     title: 'Autosaved to your workspace',
     description:
       'Every change saves automatically. Come back anytime — your diagrams are right where you left them.',
+  },
+  {
+    number: '06',
+    title: 'Export to PDF or PNG',
+    description:
+      'Download a pixel-accurate PNG for sharing, or a print-ready PDF for docs — both match your canvas exactly.',
   },
 ]
 
@@ -34,15 +46,16 @@ function HowItWorks() {
               How it works
             </span>
             <h2 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-              From sign-in to saved diagram in minutes
+              From sign-in to a diagram your team can use
             </h2>
             <p className="text-[17px] leading-relaxed text-soft">
               No onboarding calls, no imports to wrangle. Somadraw gets out
-              of your way from the first click.
+              of your way from the first click — then keeps your team in
+              sync and your diagrams ready to share.
             </p>
           </div>
 
-          <div className="mt-12 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-12 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
             {steps.map((step) => (
               <div key={step.title} className="flex flex-col items-start gap-2">
                 <span className="gradient-text text-2xl font-bold tracking-tight">

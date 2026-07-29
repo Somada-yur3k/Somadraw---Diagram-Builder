@@ -2,6 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { usePopoverState } from '../../lib/usePopoverState'
+import ShapeIcon from './ShapeIcon'
+import {
+  dfdShapes,
+  flowchartShapes,
+  usecaseShapes,
+  basicShapes,
+  textLabelTool,
+  diagramTypeGroups,
+  shapeToolKeys,
+} from './shapeCatalog'
 
 const EDITOR_TIPS = [
   'Double-click text to rename.',
@@ -14,45 +24,6 @@ const EDITOR_TIPS = [
 const TIP_INTERVAL_MS = 5000
 const TIP_FADE_MS = 300
 
-// Entity/Process/Data Store are the actual DFD notation shapes, shown in the
-// collapsible "Data Flow Diagram" section below. Text Label isn't DFD
-// notation - it lives with Select/Draw Arrow in "Tools" instead.
-const dfdShapes = [
-  { key: 'entity', label: 'Entity' },
-  { key: 'process', label: 'Process' },
-  { key: 'store', label: 'Data Store' },
-]
-// Standard flowchart notation, shown in its own collapsible "Flowchart"
-// section below - separate key namespace from the DFD shapes above (e.g.
-// 'flowProcess' vs 'process') since a flowchart process and a DFD process
-// are visually and semantically different shapes.
-const flowchartShapes = [
-  { key: 'flowProcess', label: 'Process' },
-  { key: 'decision', label: 'Decision' },
-  { key: 'terminator', label: 'Start/End' },
-  { key: 'inputOutput', label: 'Input/Output' },
-]
-// UML Use Case notation, shown in its own collapsible "Use Case Diagram"
-// section below, same treatment as dfdShapes/flowchartShapes above - own key
-// namespace since these are their own diagram type, not tied to either
-// notation above.
-const usecaseShapes = [
-  { key: 'actor', label: 'Actor' },
-  { key: 'usecase', label: 'Use Case' },
-  { key: 'boundary', label: 'System Boundary' },
-]
-// Plain geometric shapes, reachable only from the Shapes button's dropdown
-// (not the sidebar's own collapsible sections, unlike dfdShapes/
-// flowchartShapes below) - own key namespace (not reusing e.g. 'process')
-// since these are generic freeform shapes, not tied to either notation.
-const basicShapes = [
-  { key: 'circle', label: 'Circle' },
-  { key: 'square', label: 'Square' },
-  { key: 'rectangle', label: 'Rectangle' },
-  { key: 'triangle', label: 'Triangle' },
-  { key: 'diamond', label: 'Diamond' },
-]
-const textLabelTool = { key: 'label', label: 'Text Label' }
 // Line styles offered from the Draw Arrow button's dropdown - 'shape' is the
 // app's original (and still default) auto-routed orthogonal connector,
 // listed last to match the order the user asked for these in.
@@ -61,23 +32,6 @@ const connectorTypes = [
   { key: 'curved', label: 'Curved Line' },
   { key: 'shape', label: 'Shape Connector' },
 ]
-// Mobile-only: which diagram type's shapes the sidebar's dropdown picker
-// currently shows (see EditorSidebar's mobile-only block below) - desktop
-// keeps all three permanently stacked, independently collapsible sections
-// instead, so this array only ever feeds the mobile picker. `iconKey` picks
-// one representative shape from each group as the picker's own icon.
-const diagramTypeGroups = [
-  { key: 'dfd', label: 'Data Flow Diagram', shapes: dfdShapes, iconKey: 'entity' },
-  { key: 'flowchart', label: 'Flowchart', shapes: flowchartShapes, iconKey: 'decision' },
-  { key: 'usecase', label: 'Use Case Diagram', shapes: usecaseShapes, iconKey: 'actor' },
-]
-// Every shape reachable from anywhere a shape can be picked - the toolbox
-// dropdown (basicShapes only, see below) plus the sidebar's own DFD/
-// Flowchart/Use Case sections - so the Shapes button still highlights as
-// active no matter which group a placed shape's tool key belongs to.
-const shapeToolKeys = new Set(
-  [...dfdShapes, ...flowchartShapes, ...usecaseShapes, ...basicShapes].map((shape) => shape.key),
-)
 
 // Shared by the Draw Arrow and Shapes dropdowns - opens to the right of the
 // trigger button, top-aligned with it, so neither ever overflows off the
@@ -153,82 +107,6 @@ function CheckIcon() {
       <path d="M20 6 9 17l-5-5" />
     </svg>
   )
-}
-
-function ShapeIcon({ toolKey }) {
-  if (toolKey === 'entity') {
-    return <span className="h-3.5 w-5 shrink-0 rounded border-2 border-brand-blue/60 bg-brand-blue/10" />
-  }
-  if (toolKey === 'process') {
-    return <span className="h-3.5 w-5 shrink-0 rounded-[3px] border-2 border-brand-purple/60 bg-brand-purple/10" />
-  }
-  if (toolKey === 'store') {
-    return <span className="h-3.5 w-5 shrink-0 border-y-2 border-brand-pink/60 bg-brand-pink/10" />
-  }
-  if (toolKey === 'flowProcess') {
-    return <span className="h-3.5 w-5 shrink-0 rounded-[3px] border-2 border-teal-500/60 bg-teal-500/10" />
-  }
-  if (toolKey === 'decision') {
-    return (
-      <span className="relative flex h-4 w-5 shrink-0 items-center justify-center">
-        <span className="absolute h-3 w-3 rotate-45 border-2 border-amber-500/60 bg-amber-500/10" />
-      </span>
-    )
-  }
-  if (toolKey === 'terminator') {
-    return <span className="h-3.5 w-5 shrink-0 rounded-full border-2 border-slate-500/60 bg-slate-500/10" />
-  }
-  if (toolKey === 'inputOutput') {
-    return (
-      <span
-        className="h-3.5 w-5 shrink-0 border-2 border-cyan-500/60 bg-cyan-500/10"
-        style={{ transform: 'skewX(-12deg)' }}
-      />
-    )
-  }
-  if (toolKey === 'actor') {
-    return (
-      <svg width="14" height="16" viewBox="0 0 24 28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 text-indigo-500">
-        <circle cx="12" cy="5" r="4" />
-        <line x1="12" y1="9" x2="12" y2="19" />
-        <line x1="4" y1="13" x2="20" y2="13" />
-        <line x1="12" y1="19" x2="5" y2="27" />
-        <line x1="12" y1="19" x2="19" y2="27" />
-      </svg>
-    )
-  }
-  if (toolKey === 'usecase') {
-    return <span className="h-3.5 w-5 shrink-0 rounded-full border-2 border-sky-500/60 bg-sky-500/10" />
-  }
-  if (toolKey === 'boundary') {
-    return <span className="h-3.5 w-5 shrink-0 rounded-[3px] border-2 border-slate-400/60 bg-slate-400/10" />
-  }
-  if (toolKey === 'circle') {
-    return <span className="h-4 w-4 shrink-0 rounded-full border-2 border-brand-blue/60 bg-brand-blue/10" />
-  }
-  if (toolKey === 'square') {
-    return <span className="h-4 w-4 shrink-0 border-2 border-brand-purple/60 bg-brand-purple/10" />
-  }
-  if (toolKey === 'rectangle') {
-    return <span className="h-3.5 w-5 shrink-0 border-2 border-teal-500/60 bg-teal-500/10" />
-  }
-  if (toolKey === 'triangle') {
-    return (
-      <span
-        className="h-3.5 w-4 shrink-0 border-2 border-amber-500/60 bg-amber-500/10"
-        style={{ clipPath: 'polygon(50% 0%, 100% 100%, 0% 100%)' }}
-      />
-    )
-  }
-  if (toolKey === 'diamond') {
-    return (
-      <span
-        className="h-4 w-4 shrink-0 border-2 border-slate-500/60 bg-slate-500/10"
-        style={{ clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }}
-      />
-    )
-  }
-  return <span className="flex h-3.5 w-5 shrink-0 items-center justify-center text-[10px] font-bold text-body">T</span>
 }
 
 function toolButtonClass(active) {

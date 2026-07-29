@@ -21,6 +21,18 @@ const PASTE_OFFSET = 24
 // it's never read directly for pasting.
 export const CLIPBOARD_STORAGE_KEY = 'somadraw:clipboard'
 
+// Shared by every place that pastes (EditorCanvas's Ctrl+V, the right-click
+// menu's Paste item) so the "read fresh from localStorage, tolerate it being
+// missing/corrupt" logic only lives once.
+export function readClipboard() {
+  try {
+    const raw = localStorage.getItem(CLIPBOARD_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 // The exact shape a brand-new, empty diagram row's `data` column should have -
 // shared with DashboardSidebar's "+ New diagram" insert so there's one source
 // of truth for "what does a blank diagram look like."
@@ -166,6 +178,27 @@ function removeArrowsForShapes(state, shapeIds) {
   return { arrows, arrowOrder }
 }
 
+// Grouping is flat (a shape's own `groupId`, no nesting) - selecting *any*
+// member of a group is always meant to select the whole thing, so this is
+// the one place that expansion happens, called from every path that can
+// produce a shape selection (a plain click, marquee-select, shift-click's
+// own toggle below) rather than duplicated at each call site. Preserves
+// shapeOrder's own paint order in the result, same as every other id list
+// already derived from it elsewhere in this file.
+function expandToGroups(state, ids) {
+  const groupIds = new Set()
+  for (const id of ids) {
+    const groupId = state.shapes[id]?.groupId
+    if (groupId) groupIds.add(groupId)
+  }
+  if (groupIds.size === 0) return ids
+  const expanded = new Set(ids)
+  for (const id of state.shapeOrder) {
+    if (groupIds.has(state.shapes[id]?.groupId)) expanded.add(id)
+  }
+  return state.shapeOrder.filter((id) => expanded.has(id))
+}
+
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_TOOL': {
@@ -253,15 +286,21 @@ function reducer(state, action) {
       if (!action.ids || action.ids.length === 0) {
         return state.selection === null ? state : { ...state, selection: null }
       }
-      return { ...state, selection: { kind: 'shape', ids: action.ids } }
+      return { ...state, selection: { kind: 'shape', ids: expandToGroups(state, action.ids) } }
     }
 
     case 'TOGGLE_SHAPE_SELECTION': {
       const current =
         state.selection?.kind === 'shape' ? state.selection.ids : []
-      const next = current.includes(action.id)
-        ? current.filter((id) => id !== action.id)
-        : [...current, action.id]
+      // Shift-clicking one shape in a group toggles the whole group in or
+      // out together, not just that one shape - same "any member stands in
+      // for the whole group" rule SELECT applies above.
+      const toggled = expandToGroups(state, [action.id])
+      const currentSet = new Set(current)
+      const allIn = toggled.every((id) => currentSet.has(id))
+      const next = allIn
+        ? current.filter((id) => !toggled.includes(id))
+        : [...current, ...toggled.filter((id) => !currentSet.has(id))]
       return {
         ...state,
         selection: next.length === 0 ? null : { kind: 'shape', ids: next },
@@ -523,6 +562,20 @@ function reducer(state, action) {
       }
     }
 
+    // A shape's own border - separate from SET_ARROW_LINE_STYLE, which only
+    // ever applies to an arrow's connector line, and independent of fill
+    // color (a shape can have a dotted border with no fill, a solid filled
+    // border, or any other combination).
+    case 'SET_SHAPE_BORDER_STYLE': {
+      const shape = state.shapes[action.id]
+      if (!shape) return state
+      if ((shape.borderStyle ?? 'solid') === action.borderStyle) return state
+      return {
+        ...state,
+        shapes: { ...state.shapes, [action.id]: { ...shape, borderStyle: action.borderStyle } },
+      }
+    }
+
     case 'SET_SHAPE_FILL_COLOR': {
       const shape = state.shapes[action.id]
       if (!shape) return state
@@ -595,6 +648,59 @@ function reducer(state, action) {
       }
     }
 
+    // Grouping is flat and always a fresh regroup - assigning one new shared
+    // groupId to every selected shape, regardless of whatever group(s) any
+    // of them already belonged to, rather than trying to merge/nest existing
+    // groups. Matches the common "select shapes spanning two groups, group
+    // them again" case: they all end up in one new group, no nesting.
+    case 'GROUP_SELECTED': {
+      if (state.selection?.kind !== 'shape' || state.selection.ids.length < 2) return state
+      const groupId = createId()
+      const shapes = { ...state.shapes }
+      for (const id of state.selection.ids) {
+        shapes[id] = { ...shapes[id], groupId }
+      }
+      return { ...state, shapes }
+    }
+
+    // Selection always expands to a group's full membership (see
+    // expandToGroups) - clearing groupId off every currently-selected shape
+    // is therefore always "ungroup whatever group(s) are selected," never a
+    // partial ungroup, even if the selection happens to span more than one
+    // group at once.
+    case 'UNGROUP_SELECTED': {
+      if (state.selection?.kind !== 'shape') return state
+      const shapes = { ...state.shapes }
+      let changed = false
+      for (const id of state.selection.ids) {
+        if (shapes[id]?.groupId) {
+          shapes[id] = { ...shapes[id], groupId: null }
+          changed = true
+        }
+      }
+      return changed ? { ...state, shapes } : state
+    }
+
+    // shapeOrder is paint order (first = bottom, last = top - see ADD_SHAPE's
+    // own boundary-unshift comment) - moving the selected ids to one end
+    // moves everything else up/down relative to them in one step, same as
+    // any other "bring to front / send to back" tool.
+    case 'BRING_TO_FRONT': {
+      if (state.selection?.kind !== 'shape') return state
+      const ids = new Set(state.selection.ids)
+      const rest = state.shapeOrder.filter((id) => !ids.has(id))
+      const moved = state.shapeOrder.filter((id) => ids.has(id))
+      return { ...state, shapeOrder: [...rest, ...moved] }
+    }
+
+    case 'SEND_TO_BACK': {
+      if (state.selection?.kind !== 'shape') return state
+      const ids = new Set(state.selection.ids)
+      const rest = state.shapeOrder.filter((id) => !ids.has(id))
+      const moved = state.shapeOrder.filter((id) => ids.has(id))
+      return { ...state, shapeOrder: [...moved, ...rest] }
+    }
+
     // Works for every shape type (DFD/flowchart/use-case/basic/label alike) -
     // it clones whatever's selected generically by value, with no per-type
     // branching. Arrow selection is a no-op: a lone arrow copied without its
@@ -622,6 +728,12 @@ function reducer(state, action) {
       if (!clip || clip.shapes.length === 0) return state
 
       const idMap = new Map()
+      // A copied group's shapes still carry their *original* groupId - left
+      // untouched, pasting would silently re-join the newly-pasted copies to
+      // the original group still sitting right next to them, instead of
+      // forming their own new group. Remapped the same way idMap remaps the
+      // shape ids themselves, one fresh groupId per distinct original one.
+      const groupIdMap = new Map()
       const shapes = { ...state.shapes }
       const shapeIds = []
       // Re-offset positions (not the clipboard's own, possibly stale ones)
@@ -636,7 +748,12 @@ function reducer(state, action) {
         // different diagram (see the comment above on action.clip), whose
         // own data could predate this clamp existing at all.
         const { x, y } = clampShapePosition(shape.x + PASTE_OFFSET, shape.y + PASTE_OFFSET)
-        shapes[id] = { ...shape, id, x, y }
+        let groupId = shape.groupId ?? null
+        if (groupId) {
+          if (!groupIdMap.has(groupId)) groupIdMap.set(groupId, createId())
+          groupId = groupIdMap.get(groupId)
+        }
+        shapes[id] = { ...shape, id, x, y, groupId }
         pastedShapes.push(shapes[id])
         shapeIds.push(id)
       }
