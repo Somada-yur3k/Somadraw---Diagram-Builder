@@ -3,6 +3,7 @@ import EditableText from './EditableText'
 import ShapeHandles from './ShapeHandles'
 import { textFormatStyle } from './textFormat'
 import { DEFAULT_CORNER_RADIUS_BY_TYPE } from './shapeStyle'
+import { containerShapeTypes } from './shapeCatalog'
 
 function DeleteButton({ onClick }) {
   return (
@@ -18,7 +19,85 @@ function DeleteButton({ onClick }) {
   )
 }
 
-function ShapeBody({ shape, dispatch, disableDblClick }) {
+// Swimlane container - a frame divided into `laneCount` equal lanes (columns
+// side by side for vertical, rows stacked for horizontal), each its own
+// independently editable header (`shape.lane1`, `lane2`, ...), same
+// generic-field-name approach as umlClass's attributes/methods above. A
+// vertical column's own header runs across ITS top edge (horizontal text);
+// a horizontal row's own header runs down ITS left edge (rotated vertical
+// text) - the standard pool/swimlane convention (Lucidchart, draw.io, Visio)
+// where a lane's label always sits flush against the axis the lane itself
+// doesn't repeat along, so outer flex splits the frame into lanes (row-wise
+// for vertical, column-wise for horizontal) and each lane's own internal
+// flex direction (and its header's dimensions/text orientation) flips to
+// match. Each header is a *solid*-color label (not a translucent tint like
+// every other shape's fill) so it reads as a real title bar - same
+// treatment as the DFD Process shape's own badge header - and like that
+// header, its color is the shape's own customizable fill (Format panel),
+// defaulting to solid cyan when untouched. Headers also double as the
+// container's grab handle - `dragHandlers` (select/drag/drop, same as
+// Shape's own border edge strips for every container type) is spread onto
+// each one, since the container's own interior is pointer-events-none for
+// shapes placed inside it (see Shape's isContainer) and its border is only
+// 10px thick - a title bar is a far more discoverable way to select the
+// swimlane itself (e.g. to reach the Format panel and change this very
+// color) than hunting for that thin edge.
+function SwimlaneBody({ shape, orientation, laneCount, commitField, disableDblClick, cornerStyle, fill, borderStyleValue, dragHandlers }) {
+  const isVertical = orientation === 'vertical'
+  const lanes = Array.from({ length: laneCount }, (_, i) => `lane${i + 1}`)
+  const dividerAfter = isVertical ? 'border-r-2' : 'border-b-2'
+  return (
+    <div
+      className={`flex h-full w-full overflow-hidden border-2 border-cyan-600/60 bg-white ${isVertical ? 'flex-row' : 'flex-col'}`}
+      style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue }}
+    >
+      {lanes.map((field, i) => (
+        <div
+          key={field}
+          className={`flex flex-1 overflow-hidden ${isVertical ? 'flex-col' : 'flex-row'} ${
+            i < laneCount - 1 ? `${dividerAfter} border-cyan-600/40` : ''
+          }`}
+          style={{ borderColor: fill || undefined, borderStyle: borderStyleValue }}
+        >
+          {/* pointer-events-auto: opts this header back in to stay clickable
+              for rename even though the outer Shape wrapper turns
+              pointer-events-none for every container type (see Shape's own
+              comment on isContainer) - same pattern as boundary's label. */}
+          <div
+            {...dragHandlers}
+            className={`pointer-events-auto flex shrink-0 cursor-move items-center justify-center overflow-hidden bg-cyan-600 ${
+              isVertical ? 'w-full px-1.5 py-1' : 'h-full w-6 px-0.5 py-1.5'
+            }`}
+            style={{ backgroundColor: fill || undefined }}
+          >
+            <EditableText
+              value={shape[field]}
+              onCommit={commitField(field)}
+              placeholder="Person / Group"
+              placeholderOnlyWhileEditing
+              disableDblClick={disableDblClick}
+              className={`truncate text-[10.5px] font-semibold text-white ${
+                isVertical ? 'w-full text-center' : 'max-h-full'
+              }`}
+              // Vertical writing mode (not a transform: rotate) so the text's
+              // own box naturally sizes to "one line tall" in the rotated
+              // direction (~1em wide, height grows with the label) instead of
+              // clipping against the narrow w-6 header the way a rotated
+              // horizontally-laid-out box would. rotate(180deg) on top flips
+              // the reading direction to bottom-to-top, the same convention
+              // real swimlane tools use for a lane label running down its
+              // own left edge.
+              style={!isVertical ? { writingMode: 'vertical-rl', transform: 'rotate(180deg)' } : undefined}
+            />
+          </div>
+          <div className="flex-1" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers }) {
   const commitField = (field) => (value) =>
     dispatch({ type: 'RENAME_SHAPE', id: shape.id, field, value })
   const textStyle = textFormatStyle(shape)
@@ -431,6 +510,207 @@ function ShapeBody({ shape, dispatch, disableDblClick }) {
     )
   }
 
+  // UML class box - three stacked compartments (name / attributes / methods),
+  // each its own independently editable field rather than one shared `text`
+  // like every other shape, since a class box's whole point is showing those
+  // as visually distinct rows. Attributes/methods are single-line like every
+  // other EditableText here (Enter commits and blurs, same as elsewhere) -
+  // not a real multi-line member list, but enough to label a class's shape.
+  if (shape.type === 'umlClass') {
+    return (
+      <div
+        className="flex h-full w-full flex-col overflow-hidden rounded-md border-2 border-slate-500/60 bg-white"
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue }}
+      >
+        <div
+          className="shrink-0 border-b-2 border-slate-500/40 bg-slate-500/10 px-2 py-1.5"
+          style={{ borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
+        >
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="ClassName"
+            placeholderOnlyWhileEditing
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[13px] font-bold text-ink"
+            style={textStyle}
+          />
+        </div>
+        <div
+          className="shrink-0 border-b-2 border-slate-500/40 px-2 py-1.5"
+          style={{ borderColor: fill || undefined, borderStyle: borderStyleValue }}
+        >
+          <EditableText
+            value={shape.attributes}
+            onCommit={commitField('attributes')}
+            placeholder="attributes"
+            placeholderOnlyWhileEditing
+            disableDblClick={disableDblClick}
+            className="w-full text-left text-[11.5px] leading-snug text-body"
+          />
+        </div>
+        <div className="flex-1 px-2 py-1.5">
+          <EditableText
+            value={shape.methods}
+            onCommit={commitField('methods')}
+            placeholder="methods()"
+            placeholderOnlyWhileEditing
+            disableDblClick={disableDblClick}
+            className="w-full text-left text-[11.5px] leading-snug text-body"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // UML activity node - a soft, fully-rounded rectangle per the notation's
+  // "rounded rect" action symbol, distinct from flowchart's flowProcess (own
+  // key/color, see shapeCatalog.js's own note on separate namespaces).
+  if (shape.type === 'activity') {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center rounded-[28px] border-2 border-emerald-500/60 bg-emerald-500/8 px-4"
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
+      >
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder="Activity"
+          placeholderOnlyWhileEditing
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[13px] font-medium text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  // UML state node - name compartment plus a second compartment for its
+  // internal activities (e.g. "entry / ..."), the state-machine notation's
+  // own convention, same two-compartment idea as umlClass above but with
+  // exactly one lower field instead of two.
+  if (shape.type === 'state') {
+    return (
+      <div
+        className="flex h-full w-full flex-col overflow-hidden rounded-xl border-2 border-fuchsia-500/60 bg-fuchsia-500/6"
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
+      >
+        <div
+          className="flex shrink-0 items-center justify-center border-b-2 border-fuchsia-500/30 px-3 py-1.5"
+          style={{ borderColor: fill || undefined, borderStyle: borderStyleValue }}
+        >
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="State"
+            placeholderOnlyWhileEditing
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[13px] font-semibold text-ink"
+            style={textStyle}
+          />
+        </div>
+        <div className="flex flex-1 items-center justify-center px-3 py-1">
+          <EditableText
+            value={shape.entryActivity}
+            onCommit={commitField('entryActivity')}
+            placeholder="entry / do…"
+            placeholderOnlyWhileEditing
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[11px] italic text-body"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // UML decision - own key/color-independent copy of flowchart's decision
+  // diamond (see shapeCatalog.js's separate-namespace convention), kept
+  // visually identical (amber diamond) since "decision = amber diamond" is
+  // the same recognizable convention in both notations.
+  if (shape.type === 'umlDecision') {
+    return (
+      <div className="relative h-full w-full">
+        <div
+          className="absolute inset-0 border-2 border-amber-500/60 bg-amber-500/10"
+          style={{
+            clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+            borderColor: fill || undefined,
+            borderStyle: borderStyleValue,
+            backgroundColor: fillTint,
+          }}
+        />
+        <div className="relative flex h-full w-full items-center justify-center px-6">
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder="Decision"
+            placeholderOnlyWhileEditing
+            disableDblClick={disableDblClick}
+            className="w-full text-center text-[12.5px] font-medium leading-snug text-ink"
+            style={textStyle}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // Pseudostates (initial/final) carry no label in the notation - plain
+  // filled glyphs, same "fixed decorative shape, no EditableText" treatment
+  // as actor's stick figure, just without a name underneath.
+  if (shape.type === 'initial') {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="h-full w-full rounded-full bg-ink" style={{ backgroundColor: fill || undefined }} />
+      </div>
+    )
+  }
+
+  if (shape.type === 'final') {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center rounded-full border-2 border-ink"
+        style={{ borderColor: fill || undefined }}
+      >
+        <div className="h-[55%] w-[55%] rounded-full bg-ink" style={{ backgroundColor: fill || undefined }} />
+      </div>
+    )
+  }
+
+  // Fork/Join - a solid bar (no label, same "fixed decorative glyph"
+  // treatment as the pseudostates above) that splits one flow into several
+  // concurrent ones (fork) or merges them back (join) - same notation
+  // symbol either way, the direction is implied by which way the arrows
+  // attached to it point, not by anything the shape itself renders.
+  // Horizontal/vertical are separate keys (own default width/height) rather
+  // than one tool the user has to manually resize, same precedent as the
+  // swimlane orientation pairs above.
+  if (shape.type === 'forkJoinH' || shape.type === 'forkJoinV') {
+    return <div className="h-full w-full rounded-sm bg-ink" style={{ ...cornerStyle, backgroundColor: fill || undefined }} />
+  }
+
+  if (
+    shape.type === 'swimlaneV1' ||
+    shape.type === 'swimlaneV3' ||
+    shape.type === 'swimlaneH1' ||
+    shape.type === 'swimlaneH2'
+  ) {
+    const orientation = shape.type.startsWith('swimlaneV') ? 'vertical' : 'horizontal'
+    const laneCount = Number(shape.type.slice(-1))
+    return (
+      <SwimlaneBody
+        shape={shape}
+        orientation={orientation}
+        laneCount={laneCount}
+        commitField={commitField}
+        disableDblClick={disableDblClick}
+        cornerStyle={cornerStyle}
+        fill={fill}
+        borderStyleValue={borderStyleValue}
+        dragHandlers={dragHandlers}
+      />
+    )
+  }
+
   return (
     <div
       className={`flex h-full w-full items-center ${fill ? 'rounded-md border-2 px-2' : 'px-1'}`}
@@ -582,23 +862,26 @@ function Shape({
     dispatch({ type: 'DRAG_END', id: shape.id })
   }
 
-  // A system boundary is a frame meant to contain other shapes, not block
-  // them - its own hit-box normally covers its whole width/height like any
-  // other shape, which would otherwise sit on top of (and swallow every
-  // click/drag/arrow-connect meant for) whatever's placed visually inside
-  // it. pointer-events-none here opens that interior back up to whatever's
-  // beneath - a shape placed inside, or the canvas itself - while the four
-  // edge strips below opt back in so the frame itself stays selectable,
-  // draggable, and deletable from its border.
-  const isBoundary = shape.type === 'boundary'
+  // A container (system boundary, or any UML swimlane variant) is a frame
+  // meant to contain other shapes, not block them - its own hit-box normally
+  // covers its whole width/height like any other shape, which would
+  // otherwise sit on top of (and swallow every click/drag/arrow-connect
+  // meant for) whatever's placed visually inside it. pointer-events-none
+  // here opens that interior back up to whatever's beneath - a shape placed
+  // inside, or the canvas itself - while the four edge strips below opt back
+  // in so the frame itself stays selectable, draggable, and deletable from
+  // its border. containerShapeTypes lives in shapeCatalog.js since
+  // useDiagramEditor's ADD_SHAPE needs the exact same set (to paint these
+  // types at the back of shapeOrder, same reasoning).
+  const isContainer = containerShapeTypes.has(shape.type)
   const BORDER_HIT_THICKNESS = 10
   // The drag handlers below call setPointerCapture on event.currentTarget -
-  // for every other shape that's this outer div, but a boundary's outer div
+  // for every other shape that's this outer div, but a container's outer div
   // is pointer-events-none (see above), and capturing a pointer on a
   // non-hit-testable element is inconsistent across browsers: mousedown
   // could still select it (that bubbles up fine from a strip), but the
   // captured move/up events meant to actually drag it wouldn't reliably
-  // arrive. So for a boundary, these go on the (pointer-events-auto) edge
+  // arrive. So for a container, these go on the (pointer-events-auto) edge
   // strips directly instead of the outer div, keeping capture anchored to
   // an element that's actually a valid hit-test target.
   const dragHandlers = {
@@ -612,8 +895,8 @@ function Shape({
     <div
       ref={outerRef}
       data-shape-id={shape.id}
-      {...(isBoundary ? null : dragHandlers)}
-      className={`absolute select-none animate-shape-enter ${isSelected ? 'z-10' : 'z-0'} ${isBoundary ? 'pointer-events-none' : ''}`}
+      {...(isContainer ? null : dragHandlers)}
+      className={`absolute select-none animate-shape-enter ${isSelected ? 'z-10' : 'z-0'} ${isContainer ? 'pointer-events-none' : ''}`}
       style={{
         left: shape.x,
         top: shape.y,
@@ -651,9 +934,10 @@ function Shape({
             shape={shape}
             dispatch={dispatch}
             disableDblClick={!isSelectTool || readOnly}
+            dragHandlers={dragHandlers}
           />
         </div>
-        {isBoundary && (
+        {isContainer && (
           <>
             <div
               {...dragHandlers}

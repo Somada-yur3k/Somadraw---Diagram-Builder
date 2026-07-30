@@ -319,3 +319,34 @@ create policy "diagram participants can send broadcast" on realtime.messages
         and (d.user_id = auth.uid() or diagram_collaborator_role(d.id) is not null)
     )
   );
+
+-- Favoriting/starring a diagram - purely a personal, per-user preference
+-- (not shared diagram state), so this is its own table rather than a column
+-- on diagrams: a collaborator starring a diagram they don't own must never
+-- make it show as starred for the owner or any other collaborator. No `id`
+-- column needed (unlike diagram_collaborators) since nothing else ever
+-- references a single star row - the (diagram_id, user_id) pair is already
+-- its own natural, sufficient primary key.
+create table diagram_stars (
+  diagram_id uuid not null references diagrams(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (diagram_id, user_id)
+);
+
+-- Covers "all of this user's stars" lookups (what the sidebar actually
+-- queries) - the primary key above already indexes (diagram_id, user_id),
+-- a left prefix on diagram_id, not user_id, so that alone wouldn't serve
+-- this direction.
+create index diagram_stars_user_id_idx on diagram_stars (user_id);
+
+alter table diagram_stars enable row level security;
+
+-- No diagram-ownership/collaborator check on insert - starring an id the
+-- caller doesn't otherwise have access to is inert clutter for them, not a
+-- security concern (a star row carries no diagram content, and diagrams'
+-- own RLS - completely independent of this table - still governs whether
+-- they can ever actually read that diagram).
+create policy "select own stars" on diagram_stars for select using (auth.uid() = user_id);
+create policy "star a diagram" on diagram_stars for insert with check (auth.uid() = user_id);
+create policy "unstar a diagram" on diagram_stars for delete using (auth.uid() = user_id);

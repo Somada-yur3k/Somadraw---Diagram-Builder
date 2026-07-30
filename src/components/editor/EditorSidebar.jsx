@@ -7,6 +7,7 @@ import {
   dfdShapes,
   flowchartShapes,
   usecaseShapes,
+  umlShapes,
   basicShapes,
   textLabelTool,
   diagramTypeGroups,
@@ -109,12 +110,6 @@ function CheckIcon() {
   )
 }
 
-function toolButtonClass(active) {
-  return `mt-1 flex w-10 items-center justify-center gap-2.5 rounded-lg py-2.5 text-[13.5px] font-medium transition-colors md:w-full md:justify-start md:px-3 ${
-    active ? 'bg-surface-soft text-ink' : 'text-body hover:bg-surface-soft hover:text-ink'
-  }`
-}
-
 // Icon-only variant for the Tools row - horizontal (side-by-side, menu-bar
 // style) once the sidebar is wide enough to fit 3 buttons across; the
 // collapsed w-14 icon rail has no room for that, so it stays a vertical
@@ -123,6 +118,69 @@ function horizontalToolButtonClass(active) {
   return `flex w-10 items-center justify-center rounded-lg py-2.5 transition-colors md:w-auto md:flex-1 ${
     active ? 'bg-surface-soft text-ink' : 'text-body hover:bg-surface-soft hover:text-ink'
   }`
+}
+
+function iconTileClass(active) {
+  return `flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
+    active ? 'bg-surface-soft text-ink' : 'text-body hover:bg-surface-soft hover:text-ink'
+  }`
+}
+
+// A shape's own icon-only tile - the DFD/Flowchart/Use Case sections used to
+// render each shape as a full-width row (icon + its name sitting inline,
+// permanently visible) - this instead matches the Tools row's own icon-only
+// style, with the name only surfacing as a small floating label while
+// actively hovered (or focused, for keyboard/screen-reader users, since
+// hover alone would otherwise leave them with no accessible name shown at
+// all - aria-label on the button itself still covers that regardless).
+// Positioned from the tile's own live rect on each hover/focus rather than
+// computed once, so it stays correctly placed if the sidebar scrolls or
+// resizes between hovers.
+function IconTile({ toolKey, label, active, onClick }) {
+  const buttonRef = useRef(null)
+  const [tooltipPos, setTooltipPos] = useState(null)
+
+  const showTooltip = () => {
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (!rect) return
+    // Anchored to the tile's own left edge (not centered) - the sidebar
+    // itself sits flush against the left edge of the screen in both its
+    // collapsed (w-14) and expanded (w-64) widths, so a centered tooltip
+    // for a longer label ("System Boundary", "Input/Output") would often
+    // run past the viewport's own left edge, especially on the narrower
+    // rail. Growing rightward instead always has open space to expand into.
+    setTooltipPos({ left: rect.left, top: rect.bottom + 6 })
+  }
+  const hideTooltip = () => setTooltipPos(null)
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={onClick}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        onFocus={showTooltip}
+        onBlur={hideTooltip}
+        aria-label={label}
+        className={iconTileClass(active)}
+      >
+        <ShapeIcon toolKey={toolKey} />
+      </button>
+      {tooltipPos &&
+        createPortal(
+          <div
+            role="tooltip"
+            className="pointer-events-none fixed z-40 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[11px] font-medium text-white shadow-lg"
+            style={{ left: tooltipPos.left, top: tooltipPos.top }}
+          >
+            {label}
+          </div>,
+          document.body,
+        )}
+    </>
+  )
 }
 
 // Shared by the Draw Arrow and Shapes dropdown menus - one row option in
@@ -175,6 +233,7 @@ function EditorSidebar() {
   const [showShapes, setShowShapes] = useState(true)
   const [showFlowchart, setShowFlowchart] = useState(true)
   const [showUseCase, setShowUseCase] = useState(true)
+  const [showUml, setShowUml] = useState(true)
   const [showDottedOptions, setShowDottedOptions] = useState(false)
   // Mobile-only picker state - which single diagram type's shapes show
   // below it (see the mobile-only block near the end of this component).
@@ -341,20 +400,19 @@ function EditorSidebar() {
           <span>Data Flow Diagram</span>
           <ChevronIcon direction={showShapes ? 'up' : 'down'} />
         </button>
-        {showShapes &&
-          dfdShapes.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => selectTool(t.key)}
-              title={t.label}
-              aria-label={t.label}
-              className={toolButtonClass(state.tool === t.key)}
-            >
-              <ShapeIcon toolKey={t.key} />
-              <span>{t.label}</span>
-            </button>
-          ))}
+        {showShapes && (
+          <div className="mt-2 grid grid-cols-4 gap-1.5 rounded-xl border border-line p-1.5">
+            {dfdShapes.map((t) => (
+              <IconTile
+                key={t.key}
+                toolKey={t.key}
+                label={t.label}
+                active={state.tool === t.key}
+                onClick={() => selectTool(t.key)}
+              />
+            ))}
+          </div>
+        )}
 
         <button
           type="button"
@@ -366,20 +424,19 @@ function EditorSidebar() {
           <span>Flowchart</span>
           <ChevronIcon direction={showFlowchart ? 'up' : 'down'} />
         </button>
-        {showFlowchart &&
-          flowchartShapes.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => selectTool(t.key)}
-              title={t.label}
-              aria-label={t.label}
-              className={toolButtonClass(state.tool === t.key)}
-            >
-              <ShapeIcon toolKey={t.key} />
-              <span>{t.label}</span>
-            </button>
-          ))}
+        {showFlowchart && (
+          <div className="mt-2 grid grid-cols-4 gap-1.5 rounded-xl border border-line p-1.5">
+            {flowchartShapes.map((t) => (
+              <IconTile
+                key={t.key}
+                toolKey={t.key}
+                label={t.label}
+                active={state.tool === t.key}
+                onClick={() => selectTool(t.key)}
+              />
+            ))}
+          </div>
+        )}
 
         <button
           type="button"
@@ -391,20 +448,43 @@ function EditorSidebar() {
           <span>Use Case Diagram</span>
           <ChevronIcon direction={showUseCase ? 'up' : 'down'} />
         </button>
-        {showUseCase &&
-          usecaseShapes.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => selectTool(t.key)}
-              title={t.label}
-              aria-label={t.label}
-              className={toolButtonClass(state.tool === t.key)}
-            >
-              <ShapeIcon toolKey={t.key} />
-              <span>{t.label}</span>
-            </button>
-          ))}
+        {showUseCase && (
+          <div className="mt-2 grid grid-cols-4 gap-1.5 rounded-xl border border-line p-1.5">
+            {usecaseShapes.map((t) => (
+              <IconTile
+                key={t.key}
+                toolKey={t.key}
+                label={t.label}
+                active={state.tool === t.key}
+                onClick={() => selectTool(t.key)}
+              />
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowUml((visible) => !visible)}
+          aria-expanded={showUml}
+          aria-label={showUml ? 'Hide UML shapes' : 'Show UML shapes'}
+          className="mt-5 flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-soft"
+        >
+          <span>UML Diagram</span>
+          <ChevronIcon direction={showUml ? 'up' : 'down'} />
+        </button>
+        {showUml && (
+          <div className="mt-2 grid grid-cols-4 gap-1.5 rounded-xl border border-line p-1.5">
+            {umlShapes.map((t) => (
+              <IconTile
+                key={t.key}
+                toolKey={t.key}
+                label={t.label}
+                active={state.tool === t.key}
+                onClick={() => selectTool(t.key)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Mobile: the narrow icon rail has no room to show three
@@ -456,19 +536,21 @@ function EditorSidebar() {
             document.body,
           )}
 
-        {activeDiagramTypeGroup.shapes.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => selectTool(t.key)}
-            title={t.label}
-            aria-label={t.label}
-            className={toolButtonClass(state.tool === t.key)}
-          >
-            <ShapeIcon toolKey={t.key} />
-            <span className="hidden md:inline">{t.label}</span>
-          </button>
-        ))}
+        {/* Single column, not a grid like the desktop sections above - this
+            block only ever renders below the md breakpoint, where the
+            sidebar itself is the collapsed w-14 rail (md:px-4 doesn't apply
+            yet either), leaving no room for more than one 40px tile across. */}
+        <div className="mt-2 flex flex-col items-center gap-1.5 rounded-xl border border-line p-1.5">
+          {activeDiagramTypeGroup.shapes.map((t) => (
+            <IconTile
+              key={t.key}
+              toolKey={t.key}
+              label={t.label}
+              active={state.tool === t.key}
+              onClick={() => selectTool(t.key)}
+            />
+          ))}
+        </div>
       </div>
 
       <RotatingTip />

@@ -356,8 +356,10 @@ function EditorTopbar({ canvasNodeRef }) {
 
   // Two tabs, both genuinely functional (not placeholders): Home holds the
   // general canvas actions, Format holds the per-shape/arrow typography
-  // controls - which only ever mean anything once something's selected, so
-  // that tab is disabled without one.
+  // controls. Format is always clickable (not disabled without a selection)
+  // so a user can open it to see what's there - the actual controls still
+  // only render once formatTarget exists (see below), since there's
+  // nothing to apply a font/color/etc to otherwise.
   const [activeTab, setActiveTab] = useState('home')
 
   const cornerTriggerRef = useRef(null)
@@ -513,10 +515,8 @@ function EditorTopbar({ canvasNodeRef }) {
         <button
           type="button"
           onClick={() => setActiveTab('format')}
-          disabled={!formatTarget}
           aria-pressed={activeTab === 'format'}
-          title={formatTarget ? undefined : 'Select a shape or arrow to format it'}
-          className={`rounded-t-md border border-b-0 px-3 py-1.5 text-[12.5px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+          className={`rounded-t-md border border-b-0 px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
             activeTab === 'format'
               ? 'border-line bg-white text-ink'
               : 'border-transparent text-soft hover:text-ink'
@@ -900,6 +900,16 @@ function EditorTopbar({ canvasNodeRef }) {
               </>
             )}
           </div>
+        )}
+
+        {/* The tab itself is always clickable now (see activeTab's own
+            comment above) - this is what a user actually sees if they open
+            it before selecting anything, instead of the tab just silently
+            doing nothing the way disabling it used to. */}
+        {activeTab === 'format' && !formatTarget && !readOnly && (
+          <p className="self-center text-[12.5px] text-soft">
+            Select a shape or arrow to format it.
+          </p>
         )}
 
         <SaveStatus status={saveStatus} />

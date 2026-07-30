@@ -1,7 +1,19 @@
+// The first three are web-safe (Inter's already loaded for the app's own
+// UI chrome; Georgia/the system monospace stack need no network font at
+// all) - everything after is loaded from Google Fonts (see index.html's
+// own <link>, which documents why it needs crossorigin="anonymous": that's
+// what lets diagram export read these fonts' cssRules to embed them into
+// the exported image/PDF, not just render them on screen).
 export const FONT_OPTIONS = [
   { id: 'inter', label: 'Inter', family: 'Inter, sans-serif' },
   { id: 'georgia', label: 'Georgia', family: 'Georgia, serif' },
   { id: 'mono', label: 'Monospace', family: 'ui-monospace, Menlo, Consolas, monospace' },
+  { id: 'roboto', label: 'Roboto', family: 'Roboto, sans-serif' },
+  { id: 'poppins', label: 'Poppins', family: 'Poppins, sans-serif' },
+  { id: 'playfair', label: 'Playfair Display', family: '"Playfair Display", serif' },
+  { id: 'merriweather', label: 'Merriweather', family: 'Merriweather, serif' },
+  { id: 'sourceCodePro', label: 'Source Code Pro', family: '"Source Code Pro", ui-monospace, monospace' },
+  { id: 'caveat', label: 'Caveat', family: 'Caveat, cursive' },
 ]
 
 const FONT_FAMILY_BY_ID = Object.fromEntries(FONT_OPTIONS.map((f) => [f.id, f.family]))

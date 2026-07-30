@@ -31,6 +31,30 @@ export const usecaseShapes = [
   { key: 'usecase', label: 'Use Case' },
   { key: 'boundary', label: 'System Boundary' },
 ]
+// UML notation covering class structure plus Activity/State-machine nodes,
+// shown in its own collapsible "UML Diagram" section - own key namespace
+// (e.g. 'umlClass' not 'class') for the same reason as the groups above.
+export const umlShapes = [
+  { key: 'umlClass', label: 'Class' },
+  { key: 'activity', label: 'Activity' },
+  { key: 'umlDecision', label: 'Decision' },
+  { key: 'state', label: 'State' },
+  { key: 'initial', label: 'Initial' },
+  { key: 'final', label: 'Final' },
+  { key: 'forkJoinH', label: 'Fork/Join (Horizontal)' },
+  { key: 'forkJoinV', label: 'Fork/Join (Vertical)' },
+  { key: 'swimlaneV1', label: 'Vertical Swimlane (1)' },
+  { key: 'swimlaneV3', label: 'Vertical Swimlane (3)' },
+  { key: 'swimlaneH1', label: 'Horizontal Swimlane (1)' },
+  { key: 'swimlaneH2', label: 'Horizontal Swimlane (2)' },
+]
+
+// Shape types that behave as containers meant to visually hold other shapes
+// inside them (rather than sit on top of them) - System Boundary plus every
+// swimlane variant. Shared by Shape.jsx (pointer-events pass-through so
+// contents stay reachable) and useDiagramEditor's ADD_SHAPE (paint order:
+// unshifted to the back so anything placed inside stays visually on top).
+export const containerShapeTypes = new Set(['boundary', 'swimlaneV1', 'swimlaneV3', 'swimlaneH1', 'swimlaneH2'])
 // Plain geometric shapes, reachable only from the Shapes button's dropdown
 // (not the sidebar's own collapsible sections, unlike dfdShapes/
 // flowchartShapes above) - own key namespace (not reusing e.g. 'process')
@@ -51,22 +75,23 @@ export const diagramTypeGroups = [
   { key: 'dfd', label: 'Data Flow Diagram', shapes: dfdShapes, iconKey: 'entity' },
   { key: 'flowchart', label: 'Flowchart', shapes: flowchartShapes, iconKey: 'decision' },
   { key: 'usecase', label: 'Use Case Diagram', shapes: usecaseShapes, iconKey: 'actor' },
+  { key: 'uml', label: 'UML Diagram', shapes: umlShapes, iconKey: 'umlClass' },
 ]
 
 // Every shape reachable from anywhere a shape can be picked - the toolbox
-// dropdown (basicShapes) plus the sidebar's own DFD/Flowchart/Use Case
+// dropdown (basicShapes) plus the sidebar's own DFD/Flowchart/Use Case/UML
 // sections - so the Shapes button still highlights as active no matter
 // which group a placed shape's tool key belongs to.
 export const shapeToolKeys = new Set(
-  [...dfdShapes, ...flowchartShapes, ...usecaseShapes, ...basicShapes].map((shape) => shape.key),
+  [...dfdShapes, ...flowchartShapes, ...usecaseShapes, ...umlShapes, ...basicShapes].map((shape) => shape.key),
 )
 
 // Every tool key that actually places a shape on click (shapeToolKeys plus
-// the text label tool, which lives outside those three sections) mapped to
-// its display label - what FloatingShapePreview shows next to the ghost
-// icon while that tool is armed.
+// the text label tool, which lives outside those sections) mapped to its
+// display label - what FloatingShapePreview shows next to the ghost icon
+// while that tool is armed.
 export const PLACEABLE_SHAPE_LABEL_BY_KEY = Object.fromEntries(
-  [...dfdShapes, ...flowchartShapes, ...usecaseShapes, ...basicShapes, textLabelTool].map((shape) => [
+  [...dfdShapes, ...flowchartShapes, ...usecaseShapes, ...umlShapes, ...basicShapes, textLabelTool].map((shape) => [
     shape.key,
     shape.label,
   ]),

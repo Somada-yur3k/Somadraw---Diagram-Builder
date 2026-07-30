@@ -59,6 +59,28 @@ function PencilIcon() {
   )
 }
 
+// filled=false draws just the outline (unstarred, hover-only affordance);
+// filled=true fills it solid (starred, stays visible even without hover) -
+// same single-component-two-states approach as ChevronIcon elsewhere in
+// this codebase.
+function StarIcon({ filled }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+    >
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </svg>
+  )
+}
+
 function SearchIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -73,6 +95,19 @@ function TrashIcon() {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
       <path d="M3 6h18" />
       <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6" />
+    </svg>
+  )
+}
+
+// Same "step out through a door" shape as LogOutIcon below, just sized to
+// match this row's other action icons (Pencil/Trash, both 13x13) instead of
+// LogOutIcon's own 18x18 (sized for the sidebar footer's Sign out button).
+function LeaveIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="m16 17 5-5-5-5" />
+      <path d="M21 12H9" />
     </svg>
   )
 }
@@ -196,6 +231,50 @@ function DeleteDiagramDialog({ name, onCancel, onConfirm }) {
   )
 }
 
+function LeaveDiagramDialog({ name, onCancel, onConfirm }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onCancel])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 px-4"
+      onPointerDown={(event) => {
+        if (event.target === event.currentTarget) onCancel()
+      }}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
+        <h2 className="text-[16px] font-semibold text-ink">Leave "{name}"?</h2>
+        <p className="mt-1.5 text-[13.5px] leading-relaxed text-soft">
+          You'll lose access to this shared diagram and it'll disappear from your
+          list. The owner and any other collaborators keep theirs - they'd need to
+          share it with you again to bring you back.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-line px-3.5 py-2 text-[13.5px] font-medium text-ink transition-colors hover:bg-surface-soft"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-lg bg-rose-600 px-3.5 py-2 text-[13.5px] font-medium text-white transition-colors hover:bg-rose-700"
+          >
+            Leave
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SignOutConfirmDialog({ user, onCancel, onConfirm }) {
   const { name, email, picture } = getDisplayUser(user)
 
@@ -259,10 +338,11 @@ function SignOutConfirmDialog({ user, onCancel, onConfirm }) {
   )
 }
 
-function DiagramListItem({ diagram, isActive, isOwner, onOpen, onRename, onDelete }) {
+function DiagramListItem({ diagram, isActive, isOwner, isStarred, onOpen, onRename, onDelete, onLeave, onToggleStar }) {
   const [renaming, setRenaming] = useState(false)
   const [draftName, setDraftName] = useState(diagram.name)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [confirmingLeave, setConfirmingLeave] = useState(false)
 
   const commitRename = () => {
     setRenaming(false)
@@ -299,15 +379,39 @@ function DiagramListItem({ diagram, isActive, isOwner, onOpen, onRename, onDelet
     >
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
         <p className="truncate font-medium">{diagram.name}</p>
-        <p className="truncate text-[11.5px] text-soft">{formatRelativeTime(diagram.updated_at)}</p>
+        <p className="truncate text-[11.5px] text-soft">
+          {formatRelativeTime(diagram.updated_at)}
+          {!isOwner && ' · Shared with you'}
+        </p>
       </button>
       {/* A diagram shared with this user (not owned by them) can now show up
           in this same list, via diagrams' "select shared diagrams" RLS
           policy - rename/delete only ever succeed for the owner (RLS has no
           update/delete policy for a collaborator), so hiding these for
           anyone else avoids a control that looks clickable but silently
-          fails. */}
-      {isOwner && (
+          fails. A collaborator gets Leave instead (below) - their own
+          equivalent of removing it from their list, without needing (or
+          being able to grant) delete rights over the owner's diagram. */}
+      {/* Starring is independent of ownership - a collaborator can favorite
+          a diagram shared with them the same as the owner can their own, so
+          this sits outside the isOwner branch below. Stays visible even
+          without hovering once starred (unlike every other action icon
+          here) so a glance at the list shows which ones are starred. */}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation()
+          onToggleStar()
+        }}
+        title={isStarred ? 'Unstar' : 'Star'}
+        aria-label={isStarred ? 'Remove from starred' : 'Add to starred'}
+        className={`h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-white hover:text-amber-500 ${
+          isStarred ? 'flex text-amber-500' : 'hidden text-soft group-hover:flex'
+        }`}
+      >
+        <StarIcon filled={isStarred} />
+      </button>
+      {isOwner ? (
         <>
           <button
             type="button"
@@ -328,6 +432,16 @@ function DiagramListItem({ diagram, isActive, isOwner, onOpen, onRename, onDelet
             <TrashIcon />
           </button>
         </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirmingLeave(true)}
+          title="Leave"
+          aria-label="Leave shared diagram"
+          className="hidden h-6 w-6 shrink-0 items-center justify-center rounded text-soft hover:bg-white hover:text-rose-500 group-hover:flex"
+        >
+          <LeaveIcon />
+        </button>
       )}
 
       {confirmingDelete && (
@@ -340,6 +454,17 @@ function DiagramListItem({ diagram, isActive, isOwner, onOpen, onRename, onDelet
           }}
         />
       )}
+
+      {confirmingLeave && (
+        <LeaveDiagramDialog
+          name={diagram.name}
+          onCancel={() => setConfirmingLeave(false)}
+          onConfirm={() => {
+            setConfirmingLeave(false)
+            onLeave()
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -349,10 +474,13 @@ function SidebarBody({
   collapsed,
   diagrams,
   activeDiagramId,
+  starredIds,
   onOpenDiagram,
   onNewDiagram,
   onRenameDiagram,
   onDeleteDiagram,
+  onLeaveDiagram,
+  onToggleStar,
   onSignOut,
   onToggleCollapse,
   onCloseMobile,
@@ -367,6 +495,11 @@ function SidebarBody({
   const visibleDiagrams = diagrams.filter((diagram) =>
     diagram.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
   )
+  // A starred diagram lives ONLY in the Starred section below, not also in
+  // the plain list - unstarredDiagrams is what that plain list actually
+  // renders, so nothing appears twice.
+  const starredDiagrams = visibleDiagrams.filter((diagram) => starredIds.has(diagram.id))
+  const unstarredDiagrams = visibleDiagrams.filter((diagram) => !starredIds.has(diagram.id))
 
   const settingsTriggerRef = useRef(null)
   const settingsPanelRef = useRef(null)
@@ -437,15 +570,40 @@ function SidebarBody({
 
       {showLabels && (
         <nav className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2">
-          {visibleDiagrams.map((diagram) => (
+          {starredDiagrams.length > 0 && (
+            <>
+              <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-soft">
+                Starred
+              </p>
+              {starredDiagrams.map((diagram) => (
+                <DiagramListItem
+                  key={diagram.id}
+                  diagram={diagram}
+                  isActive={diagram.id === activeDiagramId}
+                  isOwner={diagram.user_id === user?.id}
+                  isStarred
+                  onOpen={() => onOpenDiagram(diagram.id)}
+                  onRename={(name) => onRenameDiagram(diagram.id, name)}
+                  onDelete={() => onDeleteDiagram(diagram.id)}
+                  onLeave={() => onLeaveDiagram(diagram.id)}
+                  onToggleStar={() => onToggleStar(diagram.id)}
+                />
+              ))}
+              <div className="my-1.5 border-t border-line" />
+            </>
+          )}
+          {unstarredDiagrams.map((diagram) => (
             <DiagramListItem
               key={diagram.id}
               diagram={diagram}
               isActive={diagram.id === activeDiagramId}
               isOwner={diagram.user_id === user?.id}
+              isStarred={false}
               onOpen={() => onOpenDiagram(diagram.id)}
               onRename={(name) => onRenameDiagram(diagram.id, name)}
               onDelete={() => onDeleteDiagram(diagram.id)}
+              onLeave={() => onLeaveDiagram(diagram.id)}
+              onToggleStar={() => onToggleStar(diagram.id)}
             />
           ))}
           {visibleDiagrams.length === 0 && (
@@ -534,6 +692,7 @@ function SidebarBody({
 
 function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobileOpen, onCloseMobile }) {
   const [diagrams, setDiagrams] = useState([])
+  const [starredIds, setStarredIds] = useState(() => new Set())
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -575,6 +734,45 @@ function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobile
     if (!error) setDiagrams(data ?? [])
   }
 
+  // Fetched once, not re-fetched on activeDiagramId the way diagrams above
+  // is - stars only ever change through this component's own toggle below,
+  // which already updates local state directly, so there's nothing else
+  // that could drift it out of sync within a single session.
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('diagram_stars')
+      .select('diagram_id')
+      .then(({ data, error }) => {
+        if (cancelled || error) return
+        setStarredIds(new Set(data.map((row) => row.diagram_id)))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Optimistic: flips local state immediately (star toggles read/feel
+  // instant, same as every other list action here) rather than waiting on
+  // the round trip - RLS scopes both the insert and delete to auth.uid()
+  // regardless of what this client asks for, so there's no meaningful way
+  // for this to fail short of a network error, which is an acceptable risk
+  // for a low-stakes, easily-reversible preference like this.
+  const handleToggleStar = async (id) => {
+    const isStarred = starredIds.has(id)
+    setStarredIds((current) => {
+      const next = new Set(current)
+      if (isStarred) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    if (isStarred) {
+      await supabase.from('diagram_stars').delete().eq('diagram_id', id).eq('user_id', user.id)
+    } else {
+      await supabase.from('diagram_stars').insert({ diagram_id: id, user_id: user.id })
+    }
+  }
+
   const handleNewDiagram = async () => {
     const { data, error } = await supabase
       .from('diagrams')
@@ -598,13 +796,31 @@ function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobile
     if (id === activeDiagramId) navigate('/workspace')
   }
 
+  // A collaborator's own equivalent of delete - removes *their* membership
+  // row rather than the diagram itself (RLS has no delete policy on
+  // `diagrams` for a non-owner, only "collaborator can leave a diagram" on
+  // `diagram_collaborators`, scoped to auth.uid() = user_id). Both filters
+  // matter here: user_id because that's what the RLS policy itself is keyed
+  // on (a collaborator can only ever delete their own row, never someone
+  // else's, regardless of what this query asks for), and diagram_id because
+  // without it this would remove *every* diagram this user has been shared
+  // into at once, not just the one they clicked Leave on.
+  const handleLeaveDiagram = async (id) => {
+    await supabase.from('diagram_collaborators').delete().eq('diagram_id', id).eq('user_id', user.id)
+    await refreshDiagrams()
+    if (id === activeDiagramId) navigate('/workspace')
+  }
+
   const sharedProps = {
     diagrams,
     activeDiagramId,
+    starredIds,
     onOpenDiagram: (id) => navigate(`/workspace/${id}`),
     onNewDiagram: handleNewDiagram,
     onRenameDiagram: handleRenameDiagram,
     onDeleteDiagram: handleDeleteDiagram,
+    onLeaveDiagram: handleLeaveDiagram,
+    onToggleStar: handleToggleStar,
     onSignOut,
     user,
   }

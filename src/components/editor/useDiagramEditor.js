@@ -3,6 +3,7 @@ import { createHistoryReducer, initHistory } from './historyReducer'
 import { facingSide, isMidSegmentEligible, pickSpacedT } from './arrowRouting'
 import { clampFontSize, patchDiffers } from './textFormat'
 import { DEFAULT_CORNER_RADIUS_BY_TYPE, clampCornerRadius, DEFAULT_FILL_COLOR_BY_TYPE } from './shapeStyle'
+import { containerShapeTypes } from './shapeCatalog'
 import { supabase } from '../../lib/supabaseClient'
 import { useDiagramChannel } from '../../lib/useDiagramChannel'
 
@@ -64,6 +65,18 @@ export const DEFAULT_SHAPE_SIZE = {
   actor: { width: 90, height: 120 },
   usecase: { width: 170, height: 90 },
   boundary: { width: 280, height: 200 },
+  umlClass: { width: 200, height: 140 },
+  activity: { width: 170, height: 64 },
+  umlDecision: { width: 170, height: 110 },
+  state: { width: 170, height: 84 },
+  initial: { width: 28, height: 28 },
+  final: { width: 32, height: 32 },
+  forkJoinH: { width: 140, height: 10 },
+  forkJoinV: { width: 10, height: 140 },
+  swimlaneV1: { width: 220, height: 300 },
+  swimlaneV3: { width: 480, height: 300 },
+  swimlaneH1: { width: 400, height: 160 },
+  swimlaneH2: { width: 400, height: 260 },
 }
 
 const DEFAULT_TEXT = {
@@ -83,6 +96,25 @@ const DEFAULT_TEXT = {
   actor: 'Actor',
   usecase: 'Use case',
   boundary: 'System',
+  umlClass: 'ClassName',
+  activity: 'Activity',
+  umlDecision: 'Decision',
+  state: 'State',
+}
+
+// Swimlane lane headers (shape.lane1, lane2, ...) aren't a single `text`
+// field like every other shape, so they can't go through DEFAULT_TEXT above
+// - unlike umlClass's attributes/methods (deliberately blank until the user
+// types something), a swimlane's lane label should start pre-filled with a
+// real value the way Entity/Process/every other shape's own DEFAULT_TEXT
+// does, since that's what actually shows up as content, not just an
+// editing-time hint (see EditableText's placeholderOnlyWhileEditing).
+function defaultLaneFields(shapeType) {
+  if (!shapeType.startsWith('swimlane')) return {}
+  const laneCount = Number(shapeType.slice(-1))
+  const fields = {}
+  for (let i = 1; i <= laneCount; i += 1) fields[`lane${i}`] = 'Person / Group'
+  return fields
 }
 
 function createId() {
@@ -255,16 +287,19 @@ function reducer(state, action) {
         rotation: 0,
         text: DEFAULT_TEXT[action.shapeType],
         badge,
+        ...defaultLaneFields(action.shapeType),
       }
 
-      // A system boundary is meant to contain other shapes, not sit on top
-      // of them - unshifting it to the back of the paint order (instead of
-      // the front, like every other shape) means anything dropped inside it
-      // later, and anything already on the canvas, both stay visually and
-      // interactively on top of it by default (see Shape.jsx for the
-      // pointer-events handling this pairs with).
-      const shapeOrder =
-        action.shapeType === 'boundary' ? [id, ...state.shapeOrder] : [...state.shapeOrder, id]
+      // A container (system boundary, any swimlane variant) is meant to
+      // contain other shapes, not sit on top of them - unshifting it to the
+      // back of the paint order (instead of the front, like every other
+      // shape) means anything dropped inside it later, and anything already
+      // on the canvas, both stay visually and interactively on top of it by
+      // default (see Shape.jsx for the pointer-events handling this pairs
+      // with).
+      const shapeOrder = containerShapeTypes.has(action.shapeType)
+        ? [id, ...state.shapeOrder]
+        : [...state.shapeOrder, id]
 
       return {
         ...state,
