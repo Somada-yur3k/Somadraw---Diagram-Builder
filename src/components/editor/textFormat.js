@@ -40,6 +40,11 @@ export function textFormatStyle(target) {
     color: target.textColor || undefined,
     fontWeight: target.bold ? 700 : undefined,
     fontStyle: target.italic ? 'italic' : undefined,
+    // Left unset by default (not forced to 'left') so an untouched shape
+    // keeps whichever alignment its own type's Tailwind classes already
+    // give it (most shapes center their text; a few, like label, don't) -
+    // same additive-only rule as every other field here.
+    textAlign: target.textAlign || undefined,
   }
 }
 

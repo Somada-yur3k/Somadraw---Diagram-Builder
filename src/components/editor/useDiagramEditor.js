@@ -716,6 +716,50 @@ function reducer(state, action) {
       return changed ? { ...state, shapes } : state
     }
 
+    // Aligns every selected shape to one edge/center of the selection's own
+    // combined bounding box (not the canvas, and not a fixed reference
+    // shape) - the same "align to selection" convention Figma/PowerPoint
+    // use, so a lone shape already sitting on that edge is a no-op and
+    // there's never a "first shape stays put, the rest move to it" special
+    // case to reason about.
+    case 'ALIGN_SELECTED': {
+      if (state.selection?.kind !== 'shape' || state.selection.ids.length < 2) return state
+      const ids = state.selection.ids
+      const selected = ids.map((id) => state.shapes[id])
+      const minX = Math.min(...selected.map((s) => s.x))
+      const maxX = Math.max(...selected.map((s) => s.x + s.width))
+      const minY = Math.min(...selected.map((s) => s.y))
+      const maxY = Math.max(...selected.map((s) => s.y + s.height))
+      const shapes = { ...state.shapes }
+      for (const shape of selected) {
+        let { x, y } = shape
+        if (action.edge === 'left') x = minX
+        else if (action.edge === 'center') x = minX + (maxX - minX - shape.width) / 2
+        else if (action.edge === 'right') x = maxX - shape.width
+        else if (action.edge === 'top') y = minY
+        else if (action.edge === 'middle') y = minY + (maxY - minY - shape.height) / 2
+        else if (action.edge === 'bottom') y = maxY - shape.height
+        shapes[shape.id] = { ...shape, ...clampShapePosition(x, y) }
+      }
+      return { ...state, shapes }
+    }
+
+    // A discrete +/-90deg step per click, applied to every selected shape at
+    // once as one atomic action (one undo step per click) - distinct from
+    // ROTATE_SHAPE (the free-angle drag-handle gesture, coalesced via
+    // CONTINUOUS_TYPES in historyReducer.js) since a button click isn't a
+    // drag gesture and each selected shape keeps rotating around its own
+    // center, not the selection's combined one.
+    case 'ROTATE_SELECTED': {
+      if (state.selection?.kind !== 'shape' || state.selection.ids.length === 0) return state
+      const shapes = { ...state.shapes }
+      for (const id of state.selection.ids) {
+        const shape = shapes[id]
+        shapes[id] = { ...shape, rotation: ((shape.rotation ?? 0) + action.delta + 360) % 360 }
+      }
+      return { ...state, shapes }
+    }
+
     // shapeOrder is paint order (first = bottom, last = top - see ADD_SHAPE's
     // own boundary-unshift comment) - moving the selected ids to one end
     // moves everything else up/down relative to them in one step, same as

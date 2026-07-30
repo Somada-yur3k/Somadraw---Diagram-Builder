@@ -98,6 +98,40 @@ function ClearAllIcon() {
   )
 }
 
+// Text-align icons (paragraph lines of varying length/position) - distinct
+// from AlignLeftIcon/etc above, which represent aligning whole *objects* to
+// each other, not text *within* one. Different concept, different glyph
+// convention (the classic word-processor one), so they're not reused.
+function TextAlignLeftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="4" y1="12" x2="14" y2="12" />
+      <line x1="4" y1="18" x2="17" y2="18" />
+    </svg>
+  )
+}
+
+function TextAlignCenterIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="7" y1="12" x2="17" y2="12" />
+      <line x1="5.5" y1="18" x2="18.5" y2="18" />
+    </svg>
+  )
+}
+
+function TextAlignRightIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="10" y1="12" x2="20" y2="12" />
+      <line x1="7" y1="18" x2="20" y2="18" />
+    </svg>
+  )
+}
+
 function CornerRadiusIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -113,6 +147,119 @@ function LineStyleIcon() {
       <line x1="4" y1="16" x2="9" y2="16" strokeDasharray="3 3" />
       <line x1="12" y1="16" x2="16" y2="16" strokeDasharray="3 3" />
       <line x1="19" y1="16" x2="20" y2="16" strokeDasharray="3 3" />
+    </svg>
+  )
+}
+
+// Same glyphs EditorContextMenu.jsx's own Group/Ungroup entries use - kept
+// as separate local components here (this file's own convention, every icon
+// defined where it's used) rather than imported, but drawn identically so
+// the toolbar button and the right-click menu item for the same action
+// always look like the same action.
+function GroupIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="10" height="10" rx="1.5" />
+      <rect x="11" y="11" width="10" height="10" rx="1.5" />
+    </svg>
+  )
+}
+
+function UngroupIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="9" height="9" rx="1.5" />
+      <rect x="13" y="13" width="9" height="9" rx="1.5" />
+    </svg>
+  )
+}
+
+function AlignLeftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="4" y1="3" x2="4" y2="21" />
+      <rect x="7" y="6" width="10" height="5" rx="1" />
+      <rect x="7" y="13" width="6" height="5" rx="1" />
+    </svg>
+  )
+}
+
+function AlignCenterHIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="12" y1="3" x2="12" y2="21" />
+      <rect x="7" y="6" width="10" height="5" rx="1" />
+      <rect x="9" y="13" width="6" height="5" rx="1" />
+    </svg>
+  )
+}
+
+function AlignRightIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="20" y1="3" x2="20" y2="21" />
+      <rect x="7" y="6" width="10" height="5" rx="1" />
+      <rect x="11" y="13" width="6" height="5" rx="1" />
+    </svg>
+  )
+}
+
+function AlignTopIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="3" y1="4" x2="21" y2="4" />
+      <rect x="6" y="7" width="5" height="10" rx="1" />
+      <rect x="13" y="7" width="5" height="6" rx="1" />
+    </svg>
+  )
+}
+
+function AlignMiddleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <rect x="6" y="7" width="5" height="10" rx="1" />
+      <rect x="13" y="9" width="5" height="6" rx="1" />
+    </svg>
+  )
+}
+
+function AlignBottomIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="3" y1="20" x2="21" y2="20" />
+      <rect x="6" y="7" width="5" height="10" rx="1" />
+      <rect x="13" y="11" width="5" height="6" rx="1" />
+    </svg>
+  )
+}
+
+function RotateLeftIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 9a8 8 0 1 1 1.5 8.5" />
+      <path d="M4 4v5h5" />
+    </svg>
+  )
+}
+
+function RotateRightIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 9a8 8 0 1 0-1.5 8.5" />
+      <path d="M20 4v5h-5" />
+    </svg>
+  )
+}
+
+// Decorative only (see the Fill control's own comment below) - a paint-drop
+// glyph pinned next to the color swatch so Fill reads as one labeled
+// control alongside Group/Align/Rotate, the same "icon means something"
+// language those three use, instead of a bare, unexplained color square.
+function FillIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M12 2c4 5 7 8.5 7 12a7 7 0 0 1-14 0c0-3.5 3-7 7-12Z" />
     </svg>
   )
 }
@@ -311,6 +458,26 @@ function EditorTopbar({ canvasNodeRef }) {
     dispatch({ type: formatActionType, id: formatTarget.id, patch })
   }
 
+  // Group/Align/Rotate live outside formatTarget's own gating above (unlike
+  // Font/Fill/Bold/etc, which only ever mean anything for exactly one
+  // target) - Align and Group both require *more than one* shape selected,
+  // which is exactly when formatTarget is null (selectedShape only resolves
+  // for a single shape), and Rotate is meant to work on either a single
+  // shape or a whole multi-selection at once. hasShapeSelectionAny covers
+  // both counts; canGroup/canUngroup mirror EditorContextMenu.jsx's own
+  // identical logic so the toolbar button and the right-click menu item
+  // never disagree about when either is available.
+  const hasShapeSelectionAny = state.selection?.kind === 'shape' && state.selection.ids.length > 0
+  const hasMultiShapeSelection = hasShapeSelectionAny && state.selection.ids.length > 1
+  const canUngroup = hasShapeSelectionAny && Boolean(state.shapes[state.selection.ids[0]]?.groupId)
+
+  const alignSelected = (edge) => {
+    dispatch({ type: 'ALIGN_SELECTED', edge })
+    alignPopover.close()
+  }
+
+  const rotateSelected = (delta) => dispatch({ type: 'ROTATE_SELECTED', delta })
+
   // Corner rounding and border style both only make sense for the shape
   // types that already have their own visible border/box - a label's
   // ShapeBody renders one too, but only once it's actually been given a
@@ -366,6 +533,10 @@ function EditorTopbar({ canvasNodeRef }) {
   const cornerPanelRef = useRef(null)
   const cornerPopover = usePopoverState(cornerTriggerRef, cornerPanelRef)
 
+  const alignTriggerRef = useRef(null)
+  const alignPanelRef = useRef(null)
+  const alignPopover = usePopoverState(alignTriggerRef, alignPanelRef)
+
   const fontSizeTriggerRef = useRef(null)
   const fontSizePanelRef = useRef(null)
   const fontSizePopover = usePopoverState(fontSizeTriggerRef, fontSizePanelRef)
@@ -390,9 +561,18 @@ function EditorTopbar({ canvasNodeRef }) {
     setLastCornerShapeId(selectedShape?.id)
     cornerPopover.close()
   }
-  const [lastFormatTargetId, setLastFormatTargetId] = useState(formatTarget?.id)
-  if (formatTarget?.id !== lastFormatTargetId) {
-    setLastFormatTargetId(formatTarget?.id)
+  // formatTarget alone can't key this anymore now that Group/Align/Rotate
+  // also live on this tab (see their own comment above) - it stays null
+  // through a marquee-select-from-nothing gesture (nothing selected -> a
+  // multi-shape selection), which is exactly the main way a user reaches
+  // Group/Align in the first place, so formatKey folds hasMultiShapeSelection
+  // in too: nothing selected and a multi-selection both look like "no single
+  // target," but only one of them should actually be treated as "no format
+  // key transition happened."
+  const formatKey = formatTarget?.id ?? (hasMultiShapeSelection ? 'multi' : null)
+  const [lastFormatKey, setLastFormatKey] = useState(formatKey)
+  if (formatKey !== lastFormatKey) {
+    setLastFormatKey(formatKey)
     fontSizePopover.close()
     // Line style is shared by shapes and arrows (see currentLineStyle/
     // setLineStyle above), so it closes on *any* format-target change -
@@ -400,6 +580,7 @@ function EditorTopbar({ canvasNodeRef }) {
     // shape-to-shape one the way corner radius's own close (above) only
     // needs to.
     lineStylePopover.close()
+    alignPopover.close()
     // Selecting something jumps straight to the Format tab; losing the
     // selection (Escape, Delete, clicking empty canvas) falls back to Home
     // rather than leaving a now-disabled Format tab showing as active. Keyed
@@ -407,7 +588,7 @@ function EditorTopbar({ canvasNodeRef }) {
     // fires on an actual selection *change* - once you're on Format you can
     // still switch back to Home yourself (to hit Undo, say) without every
     // unrelated render snapping you back.
-    setActiveTab(formatTarget ? 'format' : 'home')
+    setActiveTab(formatKey ? 'format' : 'home')
   }
 
   // input[type=color]'s React onChange fires on every native `input` event,
@@ -741,15 +922,25 @@ function EditorTopbar({ canvasNodeRef }) {
                 label - see Shape.jsx) and arrows, since formatTarget is
                 always exactly one or the other and currentFillColor/the
                 commit effect above already resolve to the right field
-                either way. */}
-            <input
-              ref={fillColorInputRef}
-              type="color"
-              defaultValue={currentFillColor}
+                either way. FillIcon is purely decorative (the swatch itself
+                is still the real, only control) - it just labels the swatch
+                the same "icon means something" way Group/Align/Rotate's own
+                buttons read, instead of leaving it the one unlabeled color
+                square in the row. */}
+            <span
               title="Fill color"
-              aria-label="Fill color"
-              className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-line p-0.5"
-            />
+              className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-line pl-1.5 pr-0.5 text-soft"
+            >
+              <FillIcon />
+              <input
+                ref={fillColorInputRef}
+                type="color"
+                defaultValue={currentFillColor}
+                title="Fill color"
+                aria-label="Fill color"
+                className="h-6 w-6 shrink-0 cursor-pointer rounded p-0.5"
+              />
+            </span>
 
             {showLineStyleControl && (
               <>
@@ -846,6 +1037,53 @@ function EditorTopbar({ canvasNodeRef }) {
               </button>
             </div>
 
+            {/* Text align - left/center/right of the text *within*
+                formatTarget's own box, via the same generic textAlign patch
+                field textFormatStyle applies (see that file's own comment).
+                None of the three shows pressed when formatTarget.textAlign
+                is unset, rather than guessing 'left' - an untouched shape's
+                *actual* alignment varies by type (most center their text,
+                a few like label don't), and there's no single default here
+                that would be honest for all of them. */}
+            <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+              <button
+                type="button"
+                onClick={() => updateFormat({ textAlign: 'left' })}
+                aria-pressed={formatTarget.textAlign === 'left'}
+                title="Align text left"
+                aria-label="Align text left"
+                className={`flex h-8 w-8 items-center justify-center transition-colors hover:bg-surface-soft ${
+                  formatTarget.textAlign === 'left' ? 'bg-surface-soft text-ink' : 'text-body'
+                }`}
+              >
+                <TextAlignLeftIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => updateFormat({ textAlign: 'center' })}
+                aria-pressed={formatTarget.textAlign === 'center'}
+                title="Align text center"
+                aria-label="Align text center"
+                className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
+                  formatTarget.textAlign === 'center' ? 'bg-surface-soft text-ink' : 'text-body'
+                }`}
+              >
+                <TextAlignCenterIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => updateFormat({ textAlign: 'right' })}
+                aria-pressed={formatTarget.textAlign === 'right'}
+                title="Align text right"
+                aria-label="Align text right"
+                className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
+                  formatTarget.textAlign === 'right' ? 'bg-surface-soft text-ink' : 'text-body'
+                }`}
+              >
+                <TextAlignRightIcon />
+              </button>
+            </div>
+
             {showShapeBorderControls && (
               <>
                 <button
@@ -902,11 +1140,137 @@ function EditorTopbar({ canvasNodeRef }) {
           </div>
         )}
 
+        {/* Group/Align/Rotate - outside formatTarget's own gating above (see
+            hasShapeSelectionAny's own comment) since Group/Align only ever
+            make sense for a multi-shape selection, which is exactly when
+            formatTarget is null. Rotate alone works for either a single
+            shape or a whole multi-selection. */}
+        {activeTab === 'format' && hasShapeSelectionAny && !readOnly && (
+          <div className="flex shrink-0 items-center gap-1.5 self-center">
+            <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+              <button
+                type="button"
+                onClick={() => rotateSelected(-90)}
+                title="Rotate left 90°"
+                aria-label="Rotate left 90°"
+                className="flex h-8 w-8 items-center justify-center text-body transition-colors hover:bg-surface-soft hover:text-ink"
+              >
+                <RotateLeftIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => rotateSelected(90)}
+                title="Rotate right 90°"
+                aria-label="Rotate right 90°"
+                className="flex h-8 w-8 items-center justify-center border-l border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+              >
+                <RotateRightIcon />
+              </button>
+            </div>
+
+            {hasMultiShapeSelection && (
+              <>
+                <button
+                  ref={alignTriggerRef}
+                  type="button"
+                  onClick={alignPopover.toggle}
+                  aria-haspopup="true"
+                  aria-expanded={alignPopover.open}
+                  aria-pressed={alignPopover.open}
+                  title="Align"
+                  aria-label="Align"
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
+                    alignPopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                  }`}
+                >
+                  <AlignLeftIcon />
+                </button>
+
+                {alignPopover.open &&
+                  alignPopover.pos &&
+                  createPortal(
+                    <div
+                      ref={alignPanelRef}
+                      className="fixed z-30 grid w-40 grid-cols-3 gap-1 rounded-xl border border-line bg-white p-1.5 shadow-lg"
+                      style={alignPopover.pos}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => alignSelected('left')}
+                        title="Align left"
+                        aria-label="Align left"
+                        className="flex h-9 items-center justify-center rounded-md text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                      >
+                        <AlignLeftIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => alignSelected('center')}
+                        title="Align center"
+                        aria-label="Align center"
+                        className="flex h-9 items-center justify-center rounded-md text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                      >
+                        <AlignCenterHIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => alignSelected('right')}
+                        title="Align right"
+                        aria-label="Align right"
+                        className="flex h-9 items-center justify-center rounded-md text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                      >
+                        <AlignRightIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => alignSelected('top')}
+                        title="Align top"
+                        aria-label="Align top"
+                        className="flex h-9 items-center justify-center rounded-md text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                      >
+                        <AlignTopIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => alignSelected('middle')}
+                        title="Align middle"
+                        aria-label="Align middle"
+                        className="flex h-9 items-center justify-center rounded-md text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                      >
+                        <AlignMiddleIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => alignSelected('bottom')}
+                        title="Align bottom"
+                        aria-label="Align bottom"
+                        className="flex h-9 items-center justify-center rounded-md text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                      >
+                        <AlignBottomIcon />
+                      </button>
+                    </div>,
+                    document.body,
+                  )}
+
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: canUngroup ? 'UNGROUP_SELECTED' : 'GROUP_SELECTED' })}
+                  title={canUngroup ? 'Ungroup' : 'Group'}
+                  aria-label={canUngroup ? 'Ungroup' : 'Group'}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                >
+                  {canUngroup ? <UngroupIcon /> : <GroupIcon />}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {/* The tab itself is always clickable now (see activeTab's own
             comment above) - this is what a user actually sees if they open
             it before selecting anything, instead of the tab just silently
             doing nothing the way disabling it used to. */}
-        {activeTab === 'format' && !formatTarget && !readOnly && (
+        {activeTab === 'format' && !formatTarget && !hasShapeSelectionAny && !readOnly && (
           <p className="self-center text-[12.5px] text-soft">
             Select a shape or arrow to format it.
           </p>
