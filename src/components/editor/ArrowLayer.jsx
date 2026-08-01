@@ -1,6 +1,7 @@
 import { memo, useMemo, useRef, useState } from 'react'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { computeArrowRoute, containsPoint, nearestBorderPoint } from './arrowRouting'
+import { ERD_CARDINALITY_MARKER_ID } from './erdCardinality'
 
 const CANVAS_WIDTH = 2400
 const CANVAS_HEIGHT = 1400
@@ -86,6 +87,19 @@ function dasharrayForLineStyle(lineStyle) {
 }
 
 const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, dispatch }) {
+  // ERD relationship notation: whichever crow's-foot/tick/circle glyph
+  // each end's own startCardinality/endCardinality picks (see
+  // ArrowCardinalityPickers.jsx and the erd-* marker defs below), instead
+  // of the plain triangle every other connector type uses. markerStart has
+  // no equivalent on the default triangle markers (arrows only ever
+  // pointed one way before ERD notation existed), so it's left undefined
+  // rather than an empty string for every other connector type.
+  const isErd = arrow.connectorType === 'erd'
+  const endMarkerId = isErd ? ERD_CARDINALITY_MARKER_ID[arrow.endCardinality] ?? ERD_CARDINALITY_MARKER_ID.many : null
+  const startMarkerId = isErd ? ERD_CARDINALITY_MARKER_ID[arrow.startCardinality] ?? ERD_CARDINALITY_MARKER_ID.one : null
+  const endMarker = endMarkerId ? `${endMarkerId}${isSelected ? '-selected' : ''}` : (isSelected ? 'arrowhead-selected' : 'arrowhead')
+  const startMarker = startMarkerId ? `${startMarkerId}${isSelected ? '-selected' : ''}` : null
+
   return (
     <g>
       <path
@@ -109,7 +123,8 @@ const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, di
         stroke={isSelected ? 'var(--color-brand-purple)' : arrow.color || 'var(--color-soft)'}
         strokeWidth={isSelected ? 2 : 1.5}
         strokeDasharray={dasharrayForLineStyle(arrow.lineStyle)}
-        markerEnd={`url(#${isSelected ? 'arrowhead-selected' : 'arrowhead'})`}
+        markerStart={startMarker ? `url(#${startMarker})` : undefined}
+        markerEnd={`url(#${endMarker})`}
         style={{ pointerEvents: 'none' }}
       />
     </g>
@@ -300,6 +315,69 @@ function ArrowLayer() {
           orient="auto"
         >
           <polygon points="0 0, 8 3.5, 0 7" fill="var(--color-brand-purple)" />
+        </marker>
+
+        {/* ERD relationship notation - 6 selectable cardinality glyphs
+            (see erdCardinality.jsx's ERD_CARDINALITY_OPTIONS), each defined
+            once and shared by both ends via orient="auto-start-reverse":
+            "auto" (the plain arrowhead markers above use it too) rotates a
+            marker to follow the path's own direction, but a *fixed* marker
+            built with its shape-touching feature (a tick/circle/crow's-foot
+            vertex) placed at refX (near the marker's own max-x edge, with
+            everything else trailing off toward x=0) only reads correctly
+            when placed via marker-end - at marker-start, plain "auto" would
+            point that same feature *away* from the shape instead. The
+            "-start-reverse" half of the value exists exactly for this: it's
+            "auto" when referenced by marker-end, and "auto" rotated a
+            further 180° when referenced by marker-start, letting every
+            glyph below serve both ends of the same connector without a
+            second, mirrored copy of each marker. No straight middle line on
+            the crow's-foot ones - it would run exactly along the
+            connector's own path and just overlap/vanish into it, same
+            reasoning most real ERD tools drop it too. */}
+        <marker id="erd-one" markerWidth="8" markerHeight="14" refX="4" refY="7" orient="auto-start-reverse">
+          <line x1="4" y1="2" x2="4" y2="12" stroke="var(--color-soft)" strokeWidth="1.3" />
+        </marker>
+        <marker id="erd-one-selected" markerWidth="8" markerHeight="14" refX="4" refY="7" orient="auto-start-reverse">
+          <line x1="4" y1="2" x2="4" y2="12" stroke="var(--color-brand-purple)" strokeWidth="1.5" />
+        </marker>
+        <marker id="erd-oneonly" markerWidth="12" markerHeight="14" refX="9" refY="7" orient="auto-start-reverse">
+          <line x1="9" y1="2" x2="9" y2="12" stroke="var(--color-soft)" strokeWidth="1.3" />
+          <line x1="6" y1="2" x2="6" y2="12" stroke="var(--color-soft)" strokeWidth="1.3" />
+        </marker>
+        <marker id="erd-oneonly-selected" markerWidth="12" markerHeight="14" refX="9" refY="7" orient="auto-start-reverse">
+          <line x1="9" y1="2" x2="9" y2="12" stroke="var(--color-brand-purple)" strokeWidth="1.5" />
+          <line x1="6" y1="2" x2="6" y2="12" stroke="var(--color-brand-purple)" strokeWidth="1.5" />
+        </marker>
+        <marker id="erd-zeroone" markerWidth="24" markerHeight="14" refX="20" refY="7" orient="auto-start-reverse">
+          <line x1="20" y1="2" x2="20" y2="12" stroke="var(--color-soft)" strokeWidth="1.3" />
+          <circle cx="10" cy="7" r="4" fill="white" stroke="var(--color-soft)" strokeWidth="1.3" />
+        </marker>
+        <marker id="erd-zeroone-selected" markerWidth="24" markerHeight="14" refX="20" refY="7" orient="auto-start-reverse">
+          <line x1="20" y1="2" x2="20" y2="12" stroke="var(--color-brand-purple)" strokeWidth="1.5" />
+          <circle cx="10" cy="7" r="4" fill="white" stroke="var(--color-brand-purple)" strokeWidth="1.5" />
+        </marker>
+        <marker id="erd-many" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto-start-reverse">
+          <path d="M12 7 L0 0 M12 7 L0 14" stroke="var(--color-soft)" strokeWidth="1.4" fill="none" />
+        </marker>
+        <marker id="erd-many-selected" markerWidth="14" markerHeight="14" refX="12" refY="7" orient="auto-start-reverse">
+          <path d="M12 7 L0 0 M12 7 L0 14" stroke="var(--color-brand-purple)" strokeWidth="1.6" fill="none" />
+        </marker>
+        <marker id="erd-onemany" markerWidth="22" markerHeight="14" refX="20" refY="7" orient="auto-start-reverse">
+          <line x1="3" y1="2" x2="3" y2="12" stroke="var(--color-soft)" strokeWidth="1.3" />
+          <path d="M20 7 L8 0 M20 7 L8 14" stroke="var(--color-soft)" strokeWidth="1.4" fill="none" />
+        </marker>
+        <marker id="erd-onemany-selected" markerWidth="22" markerHeight="14" refX="20" refY="7" orient="auto-start-reverse">
+          <line x1="3" y1="2" x2="3" y2="12" stroke="var(--color-brand-purple)" strokeWidth="1.5" />
+          <path d="M20 7 L8 0 M20 7 L8 14" stroke="var(--color-brand-purple)" strokeWidth="1.6" fill="none" />
+        </marker>
+        <marker id="erd-zeromany" markerWidth="26" markerHeight="14" refX="24" refY="7" orient="auto-start-reverse">
+          <circle cx="6" cy="7" r="4" fill="white" stroke="var(--color-soft)" strokeWidth="1.3" />
+          <path d="M24 7 L12 0 M24 7 L12 14" stroke="var(--color-soft)" strokeWidth="1.4" fill="none" />
+        </marker>
+        <marker id="erd-zeromany-selected" markerWidth="26" markerHeight="14" refX="24" refY="7" orient="auto-start-reverse">
+          <circle cx="6" cy="7" r="4" fill="white" stroke="var(--color-brand-purple)" strokeWidth="1.5" />
+          <path d="M24 7 L12 0 M24 7 L12 14" stroke="var(--color-brand-purple)" strokeWidth="1.6" fill="none" />
         </marker>
       </defs>
 

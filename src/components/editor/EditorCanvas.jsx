@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Shape from './Shape'
 import ArrowLayer from './ArrowLayer'
 import ArrowLabels from './ArrowLabels'
+import ArrowCardinalityPickers from './ArrowCardinalityPickers'
 import EditorContextMenu from './EditorContextMenu'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { containsPoint } from './arrowRouting'
@@ -68,8 +69,9 @@ function CursorMarker({ x, y, email, color, zoom }) {
     <div
       // Lets diagramExport.js's filter exclude these from an export - a
       // collaborator's live cursor is exactly the kind of thing that
-      // shouldn't show up as a stray colored arrow in a printout.
-      data-live-cursor
+      // shouldn't show up as a stray colored arrow in a printout. Same flag
+      // ArrowCardinalityPickers.jsx uses for its own selection-only chips.
+      data-export-hidden
       className="pointer-events-none absolute z-40 flex items-center gap-1"
       style={{ left: x, top: y, transform: `scale(${1 / zoom})`, transformOrigin: 'top left' }}
     >
@@ -83,6 +85,46 @@ function CursorMarker({ x, y, email, color, zoom }) {
         {email}
       </span>
     </div>
+  )
+}
+
+// Smart alignment guides - the dashed lines shown while dragging a shape
+// once it lines up with another one's edge/center (see Shape.jsx, which
+// computes these via alignmentSnap.js and clears them on drop). Positioned
+// in the same logical/diagram coordinates as Shape/CursorMarker above (the
+// canvas's own scale(zoom) transform handles the screen-pixel side), so
+// unlike CursorMarker this needs no counter-scaling - a 1px guide line
+// should get visually thinner at low zoom and thicker at high zoom, the
+// same as a shape's own border would. Never present during an actual
+// export capture (a user can't be mid-drag and clicking Export at the same
+// time), so unlike CursorMarker this doesn't need its own exclusion hook
+// into diagramExport.js's filter.
+function AlignmentGuideLines({ guides }) {
+  return (
+    <>
+      {guides.vertical && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute z-30 border-l border-dashed border-brand-pink"
+          style={{
+            left: guides.vertical.x,
+            top: guides.vertical.y1,
+            height: guides.vertical.y2 - guides.vertical.y1,
+          }}
+        />
+      )}
+      {guides.horizontal && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute z-30 border-t border-dashed border-brand-pink"
+          style={{
+            left: guides.horizontal.x1,
+            top: guides.horizontal.y,
+            width: guides.horizontal.x2 - guides.horizontal.x1,
+          }}
+        />
+      )}
+    </>
   )
 }
 
@@ -456,6 +498,8 @@ function EditorCanvas({ canvasNodeRef }) {
             )
           })}
           <ArrowLabels />
+          <ArrowCardinalityPickers />
+          <AlignmentGuideLines guides={state.alignmentGuides} />
           {cursors.map((cursor) => (
             <CursorMarker
               key={cursor.clientId}

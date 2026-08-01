@@ -49,6 +49,13 @@ export const umlShapes = [
   { key: 'swimlaneH2', label: 'Horizontal Swimlane (2)' },
 ]
 
+// Entity-Relationship notation, shown in its own collapsible "ERD Diagram"
+// section - just the one shape (a table), since a relationship is drawn
+// with the existing arrow tool (see the 'erd' connector type in
+// EditorSidebar's own connectorTypes) rather than being its own placeable
+// shape.
+export const erdShapes = [{ key: 'erdTable', label: 'Table' }]
+
 // Shape types that behave as containers meant to visually hold other shapes
 // inside them (rather than sit on top of them) - System Boundary plus every
 // swimlane variant. Shared by Shape.jsx (pointer-events pass-through so
@@ -76,6 +83,7 @@ export const diagramTypeGroups = [
   { key: 'flowchart', label: 'Flowchart', shapes: flowchartShapes, iconKey: 'decision' },
   { key: 'usecase', label: 'Use Case Diagram', shapes: usecaseShapes, iconKey: 'actor' },
   { key: 'uml', label: 'UML Diagram', shapes: umlShapes, iconKey: 'umlClass' },
+  { key: 'erd', label: 'ERD Diagram', shapes: erdShapes, iconKey: 'erdTable' },
 ]
 
 // Every shape reachable from anywhere a shape can be picked - the toolbox
@@ -83,7 +91,9 @@ export const diagramTypeGroups = [
 // sections - so the Shapes button still highlights as active no matter
 // which group a placed shape's tool key belongs to.
 export const shapeToolKeys = new Set(
-  [...dfdShapes, ...flowchartShapes, ...usecaseShapes, ...umlShapes, ...basicShapes].map((shape) => shape.key),
+  [...dfdShapes, ...flowchartShapes, ...usecaseShapes, ...umlShapes, ...erdShapes, ...basicShapes].map(
+    (shape) => shape.key,
+  ),
 )
 
 // Every tool key that actually places a shape on click (shapeToolKeys plus
@@ -91,8 +101,7 @@ export const shapeToolKeys = new Set(
 // display label - what FloatingShapePreview shows next to the ghost icon
 // while that tool is armed.
 export const PLACEABLE_SHAPE_LABEL_BY_KEY = Object.fromEntries(
-  [...dfdShapes, ...flowchartShapes, ...usecaseShapes, ...umlShapes, ...basicShapes, textLabelTool].map((shape) => [
-    shape.key,
-    shape.label,
-  ]),
+  [...dfdShapes, ...flowchartShapes, ...usecaseShapes, ...umlShapes, ...erdShapes, ...basicShapes, textLabelTool].map(
+    (shape) => [shape.key, shape.label],
+  ),
 )

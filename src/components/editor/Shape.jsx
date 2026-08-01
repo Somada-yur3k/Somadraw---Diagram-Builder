@@ -1,9 +1,12 @@
-import { memo, useRef } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import EditableText from './EditableText'
 import ShapeHandles from './ShapeHandles'
 import { textFormatStyle } from './textFormat'
 import { DEFAULT_CORNER_RADIUS_BY_TYPE } from './shapeStyle'
 import { containerShapeTypes } from './shapeCatalog'
+import { computeAlignmentSnap } from './alignmentSnap'
+import { ERD_HEADER_HEIGHT, ERD_ROW_HEIGHT } from './useDiagramEditor'
 
 function DeleteButton({ onClick }) {
   return (
@@ -66,7 +69,7 @@ function SwimlaneBody({ shape, orientation, laneCount, commitField, disableDblCl
           <div
             {...dragHandlers}
             className={`pointer-events-auto flex shrink-0 cursor-move items-center justify-center overflow-hidden bg-cyan-600 ${
-              isVertical ? 'w-full px-1.5 py-1' : 'h-full w-6 px-0.5 py-1.5'
+              isVertical ? 'w-full px-2 py-1.5' : 'h-full w-8 px-1 py-2'
             }`}
             style={{ backgroundColor: fill || undefined }}
           >
@@ -76,7 +79,7 @@ function SwimlaneBody({ shape, orientation, laneCount, commitField, disableDblCl
               placeholder="Person / Group"
               placeholderOnlyWhileEditing
               disableDblClick={disableDblClick}
-              className={`truncate text-[10.5px] font-semibold text-white ${
+              className={`truncate text-[13px] font-bold text-white ${
                 isVertical ? 'w-full text-center' : 'max-h-full'
               }`}
               // Vertical writing mode (not a transform: rotate) so the text's
@@ -93,6 +96,315 @@ function SwimlaneBody({ shape, orientation, laneCount, commitField, disableDblCl
           <div className="flex-1" />
         </div>
       ))}
+    </div>
+  )
+}
+
+// A row's own key marker icon - shown both as the trigger for
+// ErdRowKeyControl's picker menu below and as each option's own icon inside
+// that menu. Renders a small placeholder dot rather than nothing when
+// unset, so every row's icon slot occupies the same width regardless of key
+// state - names/types across rows stay column-aligned instead of jumping
+// left/right as a row gains or loses a key.
+function ErdKeyIcon({ type }) {
+  if (type === 'pk') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400">
+        <circle cx="8" cy="15" r="4" />
+        <path d="m10.5 12.5 8-8M16 5l2 2M13 8l2 2" />
+      </svg>
+    )
+  }
+  if (type === 'fk') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-sky-400">
+        <path d="M9 15a4 4 0 0 0 4 4h2a4 4 0 0 0 0-8h-1M15 9a4 4 0 0 0-4-4H9a4 4 0 0 0 0 8h1" />
+      </svg>
+    )
+  }
+  return <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-line" />
+}
+
+const ERD_KEY_OPTIONS = [
+  { value: null, label: 'No key' },
+  { value: 'pk', label: 'Primary key' },
+  { value: 'fk', label: 'Foreign key' },
+]
+
+// Per-row key picker - trigger shows the row's current icon (or the
+// placeholder dot), clicking it opens a small menu listing all 3 options
+// (Default / Primary key / Foreign key) up front, replacing the old
+// click-to-cycle behavior where the other two options were only
+// discoverable by clicking through them blind. Portaled to <body> at a
+// `fixed` position measured off the trigger's own screen rect (same
+// approach as EditorContextMenu) rather than an in-place absolute dropdown,
+// since ErdTableBody's row list clips overflow and the menu needs to stay a
+// constant on-screen size regardless of canvas zoom.
+function ErdRowKeyControl({ value, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const triggerRef = useRef(null)
+  const panelRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handlePointerDown = (event) => {
+      if (panelRef.current?.contains(event.target)) return
+      if (triggerRef.current?.contains(event.target)) return
+      setOpen(false)
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  const toggleOpen = () => {
+    if (!open) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setPos({ left: rect.left, top: rect.bottom + 4 })
+    }
+    setOpen((prev) => !prev)
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        data-no-drag
+        onClick={toggleOpen}
+        title={value === 'pk' ? 'Primary key' : value === 'fk' ? 'Foreign key' : 'Set as key'}
+        aria-label="Set column key"
+        className="flex h-5 w-5 shrink-0 items-center justify-center"
+      >
+        <ErdKeyIcon type={value} />
+      </button>
+      {open && pos
+        ? createPortal(
+            <div
+              ref={panelRef}
+              data-no-drag
+              className="fixed z-30 w-36 rounded-lg border border-line bg-white p-1 shadow-lg"
+              style={{ left: pos.left, top: pos.top }}
+            >
+              {ERD_KEY_OPTIONS.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  onClick={() => {
+                    onSelect(option.value)
+                    setOpen(false)
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-surface-soft ${
+                    value === option.value ? 'font-medium text-ink' : 'text-soft'
+                  }`}
+                >
+                  <ErdKeyIcon type={option.value} />
+                  <span className="flex-1">{option.label}</span>
+                  {value === option.value && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand-purple">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  )
+}
+
+const ERD_TYPE_OPTIONS = ['int', 'bigint', 'varchar', 'char', 'text', 'boolean', 'date', 'datetime', 'float', 'decimal', 'uuid']
+const ERD_TYPE_MENU_WIDTH = 112
+
+// Per-row data-type picker - a small chevron next to the type text opens a
+// menu of common SQL types (int/varchar/char/...), same portal-to-<body>
+// dropdown approach as ErdRowKeyControl right above. The type text itself
+// stays a plain EditableText rather than becoming part of the trigger, so
+// double-clicking it to type any custom type not on the list (matching
+// every other row field in this table) keeps working exactly as before -
+// the chevron is purely an additional quick-pick shortcut, not a
+// replacement for freeform entry.
+function ErdRowTypeControl({ value, onCommit, disableDblClick }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const triggerRef = useRef(null)
+  const panelRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handlePointerDown = (event) => {
+      if (panelRef.current?.contains(event.target)) return
+      if (triggerRef.current?.contains(event.target)) return
+      setOpen(false)
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  const toggleOpen = () => {
+    if (!open) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setPos({ left: rect.right - ERD_TYPE_MENU_WIDTH, top: rect.bottom + 4 })
+    }
+    setOpen((prev) => !prev)
+  }
+
+  return (
+    <span className="flex shrink-0 items-center gap-0.5">
+      <EditableText
+        value={value}
+        onCommit={onCommit}
+        placeholder="type"
+        placeholderOnlyWhileEditing
+        disableDblClick={disableDblClick}
+        className="max-w-16 truncate text-[12px] text-soft"
+      />
+      <button
+        ref={triggerRef}
+        type="button"
+        data-no-drag
+        onClick={toggleOpen}
+        title="Pick a data type"
+        aria-label="Pick a data type"
+        className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-soft/60 hover:text-soft"
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      {open && pos
+        ? createPortal(
+            <div
+              ref={panelRef}
+              data-no-drag
+              className="fixed z-30 max-h-56 overflow-y-auto rounded-lg border border-line bg-white p-1 shadow-lg"
+              style={{ left: pos.left, top: pos.top, width: ERD_TYPE_MENU_WIDTH }}
+            >
+              {ERD_TYPE_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => {
+                    onCommit(option)
+                    setOpen(false)
+                  }}
+                  className={`block w-full rounded-md px-2 py-1 text-left text-[12px] transition-colors hover:bg-surface-soft ${
+                    value === option ? 'font-medium text-ink' : 'text-soft'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )
+        : null}
+    </span>
+  )
+}
+
+// ERD table - same plain white-card-with-a-colored-header look every other
+// container here (umlClass, swimlanes) already uses, not a fully-filled
+// dark card - only the header compartment gets `fill`'s solid color (like
+// swimlanes' own lane headers), everything else stays the app's usual
+// white body with light dividers. Has a *dynamic* list of rows
+// (shape.rows: [{id, name, type, key}]) rather than a fixed set of
+// compartments like umlClass's attributes/methods, since a real table can
+// have any number of columns - added/removed one at a time
+// (ADD_ERD_ROW/REMOVE_ERD_ROW in useDiagramEditor.js), each of which also
+// grows/shrinks the shape's own height by exactly ERD_ROW_HEIGHT so the box
+// is always exactly tall enough for its own rows, never overflowing or
+// leaving a gap. Rows render at that same fixed height (not
+// flex-distributed) for the same reason - "+ Add column" therefore lives in
+// the header (a fixed-height row that doesn't grow) rather than as its own
+// extra row, which would silently throw that height math off by one row
+// every time.
+function ErdTableBody({ shape, dispatch, disableDblClick, cornerStyle, fill, borderStyleValue }) {
+  const commitText = (value) => dispatch({ type: 'RENAME_SHAPE', id: shape.id, field: 'text', value })
+  const commitRow = (rowId, field) => (value) =>
+    dispatch({ type: 'UPDATE_ERD_ROW', id: shape.id, rowId, field, value })
+
+  return (
+    <div
+      className="flex h-full w-full flex-col overflow-hidden rounded-md border-2 border-slate-500/60 bg-white"
+      style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue }}
+    >
+      <div
+        className="flex shrink-0 items-center justify-between gap-2 bg-slate-500 px-3"
+        style={{ height: ERD_HEADER_HEIGHT, backgroundColor: fill || undefined }}
+      >
+        <EditableText
+          value={shape.text}
+          onCommit={commitText}
+          placeholder="table_name"
+          placeholderOnlyWhileEditing
+          disableDblClick={disableDblClick}
+          className="min-w-0 flex-1 truncate text-[13px] font-semibold text-white"
+        />
+        <button
+          type="button"
+          data-no-drag
+          onClick={() => dispatch({ type: 'ADD_ERD_ROW', id: shape.id })}
+          title="Add column"
+          aria-label="Add column"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-hidden">
+        {shape.rows.map((row, i) => (
+          <div
+            key={row.id}
+            className={`group/row flex items-center gap-1.5 px-2 ${
+              i < shape.rows.length - 1 ? 'border-b border-line' : ''
+            }`}
+            style={{ height: ERD_ROW_HEIGHT }}
+          >
+            <ErdRowKeyControl value={row.key} onSelect={commitRow(row.id, 'key')} />
+            <EditableText
+              value={row.name}
+              onCommit={commitRow(row.id, 'name')}
+              placeholder="column"
+              placeholderOnlyWhileEditing
+              disableDblClick={disableDblClick}
+              className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-ink"
+            />
+            <ErdRowTypeControl value={row.type} onCommit={commitRow(row.id, 'type')} disableDblClick={disableDblClick} />
+            <button
+              type="button"
+              data-no-drag
+              onClick={() => dispatch({ type: 'REMOVE_ERD_ROW', id: shape.id, rowId: row.id })}
+              title="Remove column"
+              aria-label="Remove column"
+              className="hidden h-4 w-4 shrink-0 items-center justify-center rounded text-soft transition-colors hover:bg-surface-soft hover:text-rose-500 group-hover/row:flex"
+            >
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -711,6 +1023,19 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers }) {
     )
   }
 
+  if (shape.type === 'erdTable') {
+    return (
+      <ErdTableBody
+        shape={shape}
+        dispatch={dispatch}
+        disableDblClick={disableDblClick}
+        cornerStyle={cornerStyle}
+        fill={fill}
+        borderStyleValue={borderStyleValue}
+      />
+    )
+  }
+
   return (
     <div
       className={`flex h-full w-full items-center ${fill ? 'rounded-md border-2 px-2' : 'px-1'}`}
@@ -843,14 +1168,35 @@ function Shape({
     if (!drag || drag.pointerId !== event.pointerId) return
     const dx = (event.clientX - drag.startClientX) / zoom
     const dy = (event.clientY - drag.startClientY) / zoom
+
+    // Smart alignment guides: snap the PRIMARY dragged shape (this Shape
+    // instance's own `shape` - the one whose pointerdown started the drag,
+    // never one of the other tracked shapes in a group drag, since pointer
+    // capture keeps every move event routed to that same originating
+    // element) against every OTHER shape not currently being moved, then
+    // apply that same extra offset to every tracked shape so a group drag
+    // shifts together and keeps its own internal spacing intact - same
+    // "one shared dx/dy" reasoning the plain drag below already relies on.
+    const primaryStart = drag.shapes.find((s) => s.id === shape.id)
+    const draggedIds = new Set(drag.shapes.map((s) => s.id))
+    const others = Object.values(stateRef.current.shapes).filter((s) => !draggedIds.has(s.id))
+    const snap = computeAlignmentSnap(
+      { x: primaryStart.startX + dx, y: primaryStart.startY + dy, width: shape.width, height: shape.height },
+      others,
+    )
+
     for (const trackedShape of drag.shapes) {
       dispatch({
         type: 'MOVE_SHAPE',
         id: trackedShape.id,
-        x: trackedShape.startX + dx,
-        y: trackedShape.startY + dy,
+        x: trackedShape.startX + dx + snap.dx,
+        y: trackedShape.startY + dy + snap.dy,
       })
     }
+    dispatch({
+      type: 'SET_ALIGNMENT_GUIDES',
+      guides: { vertical: snap.verticalGuide, horizontal: snap.horizontalGuide },
+    })
   }
 
   const endDrag = (event) => {
@@ -860,6 +1206,7 @@ function Shape({
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     dispatch({ type: 'DRAG_END', id: shape.id })
+    dispatch({ type: 'SET_ALIGNMENT_GUIDES', guides: { vertical: null, horizontal: null } })
   }
 
   // A container (system boundary, or any UML swimlane variant) is a frame

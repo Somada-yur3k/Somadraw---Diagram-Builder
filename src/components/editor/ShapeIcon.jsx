@@ -145,6 +145,16 @@ function ShapeIcon({ toolKey }) {
       </span>
     )
   }
+  if (toolKey === 'erdTable') {
+    return (
+      <span className="flex h-4 w-5 shrink-0 flex-col overflow-hidden rounded-xs border-2 border-slate-500/60 bg-white">
+        <span className="h-[30%] w-full bg-slate-500" />
+        <span className="h-[23%] w-full border-b border-slate-500/30" />
+        <span className="h-[23%] w-full border-b border-slate-500/30" />
+        <span className="h-[24%] w-full" />
+      </span>
+    )
+  }
   if (toolKey === 'circle') {
     return <span className="h-4 w-4 shrink-0 rounded-full border-2 border-brand-blue/60 bg-brand-blue/10" />
   }

@@ -7,6 +7,18 @@ import { containerShapeTypes } from './shapeCatalog'
 import { supabase } from '../../lib/supabaseClient'
 import { useDiagramChannel } from '../../lib/useDiagramChannel'
 
+// An ERD table's height isn't just a static default - it grows/shrinks by
+// exactly one row's worth every time a row is added/removed (see
+// ADD_ERD_ROW/REMOVE_ERD_ROW below), so unlike every other type's fixed
+// DEFAULT_SHAPE_SIZE entry, these two constants are the actual unit that
+// math is built from, not just documentation of a starting size.
+export const ERD_HEADER_HEIGHT = 34
+export const ERD_ROW_HEIGHT = 26
+// Column count a freshly-placed table starts with - built with fresh ids at
+// ADD_SHAPE time (not a static array reused across every table instance),
+// same as every other per-shape id in this file.
+const ERD_STARTER_ROW_COUNT = 3
+
 const SAVE_DEBOUNCE_MS = 500
 // Pixel offset applied to each pasted shape, relative to what was copied -
 // keeps a paste from landing exactly on top of its source, indistinguishable
@@ -77,6 +89,7 @@ export const DEFAULT_SHAPE_SIZE = {
   swimlaneV3: { width: 480, height: 300 },
   swimlaneH1: { width: 400, height: 160 },
   swimlaneH2: { width: 400, height: 260 },
+  erdTable: { width: 230, height: ERD_HEADER_HEIGHT + ERD_ROW_HEIGHT * ERD_STARTER_ROW_COUNT },
 }
 
 const DEFAULT_TEXT = {
@@ -100,6 +113,7 @@ const DEFAULT_TEXT = {
   activity: 'Activity',
   umlDecision: 'Decision',
   state: 'State',
+  erdTable: 'table_name',
 }
 
 // Swimlane lane headers (shape.lane1, lane2, ...) aren't a single `text`
@@ -115,6 +129,20 @@ function defaultLaneFields(shapeType) {
   const fields = {}
   for (let i = 1; i <= laneCount; i += 1) fields[`lane${i}`] = 'Person / Group'
   return fields
+}
+
+// A fresh table starts with an id/int/pk row already filled in (the one
+// column virtually every real table has) plus a couple of blank ones ready
+// to name - same "starts pre-filled with a real, useful default" idea as
+// every other type's own DEFAULT_TEXT, just structured as a list instead of
+// a single field.
+function defaultErdRows(shapeType) {
+  if (shapeType !== 'erdTable') return {}
+  const rows = [{ id: createId(), name: 'id', type: 'int', key: 'pk' }]
+  for (let i = 1; i < ERD_STARTER_ROW_COUNT; i += 1) {
+    rows.push({ id: createId(), name: '', type: '', key: null })
+  }
+  return { rows }
 }
 
 function createId() {
@@ -184,6 +212,12 @@ function initState(initialData) {
     // undo-tracked - always resets to 1 on reload).
     showGrid: saved?.showGrid ?? true,
     viewport: { zoom: 1 },
+    // Smart alignment guides shown while dragging a shape - same treatment
+    // as hoveredShapeId above (transient UI state, not persisted, not
+    // undo-tracked). Shape.jsx sets this on every drag tick and clears it on
+    // drop; { vertical, horizontal } are each either null or a single
+    // { x, y1, y2 } / { y, x1, x2 } line descriptor (see alignmentSnap.js).
+    alignmentGuides: { vertical: null, horizontal: null },
   }
 }
 
@@ -288,6 +322,7 @@ function reducer(state, action) {
         text: DEFAULT_TEXT[action.shapeType],
         badge,
         ...defaultLaneFields(action.shapeType),
+        ...defaultErdRows(action.shapeType),
       }
 
       // A container (system boundary, any swimlane variant) is meant to
@@ -454,6 +489,14 @@ function reducer(state, action) {
         toT,
         connectorType: state.arrowConnectorType,
         lineStyle: state.arrowLineStyle,
+        // "One" source feeding "many" target is the common default reading
+        // of a freshly-drawn relationship (matches the plain crow's-foot
+        // look this connector type already had before per-end cardinality
+        // was editable at all) - only meaningful for connectorType 'erd',
+        // but set unconditionally since an unused field on every other
+        // connector type is harmless and one fewer branch to maintain.
+        startCardinality: 'one',
+        endCardinality: 'many',
       }
       return {
         ...state,
@@ -527,6 +570,23 @@ function reducer(state, action) {
       return {
         ...state,
         arrows: { ...state.arrows, [action.id]: { ...arrow, routeMidOffset: null } },
+      }
+    }
+
+    // action.end is 'start' or 'end' (which endpoint's cardinality glyph is
+    // being changed), action.value is one of ERD_CARDINALITY_OPTIONS'
+    // values (erdCardinality.jsx) - only meaningful for connectorType
+    // 'erd', but this stays a plain generic field patch like every other
+    // single-field arrow update here, same reasoning as startCardinality's
+    // own comment above.
+    case 'SET_ARROW_CARDINALITY': {
+      const arrow = state.arrows[action.id]
+      if (!arrow) return state
+      const field = action.end === 'start' ? 'startCardinality' : 'endCardinality'
+      if (arrow[field] === action.value) return state
+      return {
+        ...state,
+        arrows: { ...state.arrows, [action.id]: { ...arrow, [field]: action.value } },
       }
     }
 
@@ -611,6 +671,45 @@ function reducer(state, action) {
       }
     }
 
+    // An ERD table's height is derived from its own row count (see
+    // ERD_HEADER_HEIGHT/ERD_ROW_HEIGHT) rather than something the user
+    // resizes freely the way every other shape's box is - adding a column
+    // grows the box by exactly one row's worth so the new row always has
+    // somewhere to render, instead of overflowing a box the user would
+    // otherwise have to remember to stretch by hand.
+    case 'ADD_ERD_ROW': {
+      const shape = state.shapes[action.id]
+      if (!shape || shape.type !== 'erdTable') return state
+      const rows = [...shape.rows, { id: createId(), name: '', type: '', key: null }]
+      return {
+        ...state,
+        shapes: { ...state.shapes, [action.id]: { ...shape, rows, height: shape.height + ERD_ROW_HEIGHT } },
+      }
+    }
+
+    // Never lets a table shrink past one remaining column - a table with no
+    // rows at all has nothing left to click "+" back onto, and this app has
+    // no other way to add the very first row back.
+    case 'REMOVE_ERD_ROW': {
+      const shape = state.shapes[action.id]
+      if (!shape || shape.type !== 'erdTable' || shape.rows.length <= 1) return state
+      const rows = shape.rows.filter((row) => row.id !== action.rowId)
+      if (rows.length === shape.rows.length) return state
+      return {
+        ...state,
+        shapes: { ...state.shapes, [action.id]: { ...shape, rows, height: shape.height - ERD_ROW_HEIGHT } },
+      }
+    }
+
+    case 'UPDATE_ERD_ROW': {
+      const shape = state.shapes[action.id]
+      if (!shape || shape.type !== 'erdTable') return state
+      const rows = shape.rows.map((row) =>
+        row.id === action.rowId ? { ...row, [action.field]: action.value } : row,
+      )
+      return { ...state, shapes: { ...state.shapes, [action.id]: { ...shape, rows } } }
+    }
+
     case 'SET_SHAPE_FILL_COLOR': {
       const shape = state.shapes[action.id]
       if (!shape) return state
@@ -651,6 +750,12 @@ function reducer(state, action) {
       if (state.hoveredShapeId === action.shapeId) return state
       return { ...state, hoveredShapeId: action.shapeId }
     }
+
+    // Dispatched by Shape.jsx on every drag tick (computed via
+    // alignmentSnap.js) and cleared (both fields null) on drop - purely
+    // transient/visual, see alignmentGuides' own comment in initState above.
+    case 'SET_ALIGNMENT_GUIDES':
+      return { ...state, alignmentGuides: action.guides }
 
     case 'CANCEL_PENDING_ARROW':
       if (state.pendingArrowSourceId === null) return state
@@ -899,6 +1004,7 @@ const READ_ONLY_ALLOWED_ACTIONS = new Set([
   'DESELECT',
   'SET_ZOOM',
   'SET_HOVERED_SHAPE',
+  'SET_ALIGNMENT_GUIDES',
   'CANCEL_PENDING_ARROW',
   'TOGGLE_GRID',
   'UNDO',

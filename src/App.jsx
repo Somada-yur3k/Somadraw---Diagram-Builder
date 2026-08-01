@@ -12,7 +12,6 @@ import WorkspaceHome from './components/WorkspaceHome'
 import DiagramWorkspace from './components/DiagramWorkspace'
 import SettingsView from './components/SettingsView'
 import DeveloperInfoView from './components/DeveloperInfoView'
-import MonitorUsersView from './components/MonitorUsersView'
 import LoadingScreen from './components/LoadingScreen'
 import './App.css'
 
@@ -97,7 +96,6 @@ function App() {
         <Route index element={<WorkspaceHome />} />
         <Route path="settings" element={<SettingsView user={session?.user} />} />
         <Route path="developer" element={<DeveloperInfoView />} />
-        <Route path="monitor" element={<MonitorUsersView />} />
         <Route path=":diagramId" element={<DiagramWorkspace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

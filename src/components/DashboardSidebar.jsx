@@ -652,14 +652,25 @@ function SidebarBody({
                 <span>Developer</span>
               </button>
               {user?.email === OWNER_EMAIL && (
-                <button
-                  type="button"
-                  onClick={() => goToSettingsPage('/workspace/monitor')}
+                // A real cross-page link (not goToSettingsPage's client-side
+                // navigate) - /monitor is its own standalone page/bundle
+                // (monitor.html), not a route inside this app's own
+                // <Routes>, so getting there needs an actual page load.
+                // New tab so leaving it open doesn't lose whatever diagram
+                // was open here.
+                <a
+                  href="/monitor"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => {
+                    settingsPopover.close()
+                    if (isMobile) onCloseMobile()
+                  }}
                   className={settingsMenuItemClass}
                 >
                   <MonitorIcon />
                   <span>Monitor Users</span>
-                </button>
+                </a>
               )}
             </div>,
             document.body,
@@ -697,9 +708,7 @@ function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobile
   const location = useLocation()
 
   const isSettingsActive =
-    location.pathname === '/workspace/settings' ||
-    location.pathname === '/workspace/developer' ||
-    location.pathname === '/workspace/monitor'
+    location.pathname === '/workspace/settings' || location.pathname === '/workspace/developer'
   const diagramIdMatch = !isSettingsActive && location.pathname.match(/^\/workspace\/([^/]+)$/)
   const activeDiagramId = diagramIdMatch ? diagramIdMatch[1] : null
 

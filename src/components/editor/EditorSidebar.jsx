@@ -8,6 +8,7 @@ import {
   flowchartShapes,
   usecaseShapes,
   umlShapes,
+  erdShapes,
   basicShapes,
   textLabelTool,
   diagramTypeGroups,
@@ -32,6 +33,12 @@ const connectorTypes = [
   { key: 'straight', label: 'Straight Line' },
   { key: 'curved', label: 'Curved Line' },
   { key: 'shape', label: 'Shape Connector' },
+  // Routes identically to 'shape' (arrowRouting.js's own orthogonal
+  // fallthrough already handles any connectorType it doesn't recognize by
+  // name) - the only real difference is ArrowLayer.jsx swapping in
+  // crow's-foot/one endpoint markers instead of the plain triangle
+  // arrowhead, matching ERD relationship-line notation.
+  { key: 'erd', label: 'ERD Relationship' },
 ]
 
 // Shared by the Draw Arrow and Shapes dropdowns - opens to the right of the
@@ -234,6 +241,7 @@ function EditorSidebar() {
   const [showFlowchart, setShowFlowchart] = useState(true)
   const [showUseCase, setShowUseCase] = useState(true)
   const [showUml, setShowUml] = useState(true)
+  const [showErd, setShowErd] = useState(true)
   const [showDottedOptions, setShowDottedOptions] = useState(false)
   // Mobile-only picker state - which single diagram type's shapes show
   // below it (see the mobile-only block near the end of this component).
@@ -475,6 +483,30 @@ function EditorSidebar() {
         {showUml && (
           <div className="mt-2 grid grid-cols-4 gap-1.5 rounded-xl border border-line p-1.5">
             {umlShapes.map((t) => (
+              <IconTile
+                key={t.key}
+                toolKey={t.key}
+                label={t.label}
+                active={state.tool === t.key}
+                onClick={() => selectTool(t.key)}
+              />
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowErd((visible) => !visible)}
+          aria-expanded={showErd}
+          aria-label={showErd ? 'Hide ERD shapes' : 'Show ERD shapes'}
+          className="mt-5 flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-soft"
+        >
+          <span>ERD Diagram</span>
+          <ChevronIcon direction={showErd ? 'up' : 'down'} />
+        </button>
+        {showErd && (
+          <div className="mt-2 grid grid-cols-4 gap-1.5 rounded-xl border border-line p-1.5">
+            {erdShapes.map((t) => (
               <IconTile
                 key={t.key}
                 toolKey={t.key}

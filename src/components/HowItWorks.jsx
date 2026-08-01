@@ -2,37 +2,22 @@ const steps = [
   {
     number: '01',
     title: 'Sign in with Google',
-    description: 'No forms, no passwords. One click with your Google account and you’re in.',
+    description: 'One click — no forms, no passwords.',
   },
   {
     number: '02',
-    title: 'Start a canvas',
-    description:
-      'Create a new diagram from your workspace — a blank canvas, ready in one click.',
+    title: 'Sketch your diagram',
+    description: 'Drop entity, process, and data store shapes, then connect them with auto-routing edges.',
   },
   {
     number: '03',
-    title: 'Drop shapes, connect flows',
-    description:
-      'Place entity, process, and data store shapes, then connect them with auto-routing edges — drag to reroute anytime.',
+    title: 'Collaborate live',
+    description: 'Share a link — edits, cursors, and selections sync instantly for everyone.',
   },
   {
     number: '04',
-    title: 'Collaborate in real time',
-    description:
-      'Share a diagram and edits, cursors, and selections sync live to everyone in it — no refresh, no version conflicts.',
-  },
-  {
-    number: '05',
-    title: 'Autosaved to your workspace',
-    description:
-      'Every change saves automatically. Come back anytime — your diagrams are right where you left them.',
-  },
-  {
-    number: '06',
-    title: 'Export to PDF or PNG',
-    description:
-      'Download a pixel-accurate PNG for sharing, or a print-ready PDF for docs — both match your canvas exactly.',
+    title: 'Save & export',
+    description: 'Every change autosaves. Export to PDF or PNG anytime.',
   },
 ]
 
@@ -49,16 +34,15 @@ function HowItWorks() {
               From sign-in to a diagram your team can use
             </h2>
             <p className="text-[17px] leading-relaxed text-soft">
-              No onboarding calls, no imports to wrangle. Somadraw gets out
-              of your way from the first click — then keeps your team in
-              sync and your diagrams ready to share.
+              No onboarding calls, no imports to wrangle — just sign in and
+              start drawing.
             </p>
           </div>
 
-          <div className="mt-12 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-12 grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((step) => (
-              <div key={step.title} className="flex flex-col items-start gap-2">
-                <span className="gradient-text text-2xl font-bold tracking-tight">
+              <div key={step.title} className="flex flex-col items-start gap-3">
+                <span className="gradient-bg flex h-10 w-10 items-center justify-center rounded-full text-[14px] font-bold text-white shadow-sm">
                   {step.number}
                 </span>
                 <h3 className="text-[16.5px] font-semibold text-ink">

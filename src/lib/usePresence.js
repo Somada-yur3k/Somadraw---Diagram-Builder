@@ -4,20 +4,21 @@ import { supabase } from './supabaseClient'
 const PRESENCE_CHANNEL = 'online-users'
 
 // Tracks the signed-in user as present on a shared Realtime presence
-// channel for as long as this hook stays mounted (Dashboard.jsx, so for the
-// whole time a session is anywhere under /workspace), and returns the live,
+// channel for as long as this hook stays mounted, and returns the live,
 // deduplicated list of everyone currently on that same channel - including
-// this user. MonitorUsersView reads the returned list via Outlet context
-// instead of opening a second connection to the same channel, so there's
-// exactly one subscription per browser tab no matter how many nested routes
-// end up caring about presence.
+// this user. The only caller today is MonitorPage.jsx (its own standalone
+// page/bundle, monitor.html - see that file's own comment on why), so this
+// connection is only ever opened by whoever is actively viewing that
+// owner-only page, not by every signed-in visitor's whole /workspace
+// session the way it used to be when Dashboard.jsx called this itself and
+// passed the result down via Outlet context.
 //
 // Presence is ephemeral - Supabase drops a client's entry the instant it
 // disconnects or the tab closes - so there's no database row to clean up.
 // Note this channel isn't gated by Realtime Authorization, so any
 // signed-in client that knew the channel name could technically subscribe
 // to it too; what's actually restricted is the Monitor *page* (to
-// OWNER_EMAIL, see MonitorUsersView). Fine for a single-owner tool - add a
+// OWNER_EMAIL, see MonitorPage.jsx). Fine for a single-owner tool - add a
 // Realtime Authorization policy on this channel if that tradeoff changes.
 export function useOnlineUsers(user) {
   const [onlineUsers, setOnlineUsers] = useState([])

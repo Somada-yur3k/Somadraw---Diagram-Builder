@@ -61,6 +61,11 @@ create policy "owner can view all feedback" on feedback for select
 -- needing security definer - the row it looks for is always that same
 -- user's own, which this policy already grants them.
 create policy "select own feedback" on feedback for select using (auth.uid() = user_id);
+-- Lets MonitorPage's Feedback list actually delete an entry (e.g. once
+-- acted on, or spam) - no policy existed for delete at all before this, so
+-- it silently denied everyone, owner included.
+create policy "owner can delete feedback" on feedback for delete
+  using (auth.jwt() ->> 'email' = 'eurikasomada@gmail.com');
 
 -- Rate limit: at most one feedback submission per user per hour, enforced
 -- server-side (not just in the UI) so it can't be bypassed by calling
@@ -350,3 +355,44 @@ alter table diagram_stars enable row level security;
 create policy "select own stars" on diagram_stars for select using (auth.uid() = user_id);
 create policy "star a diagram" on diagram_stars for insert with check (auth.uid() = user_id);
 create policy "unstar a diagram" on diagram_stars for delete using (auth.uid() = user_id);
+
+-- Backs MonitorUsersView's "All Users" section - the full registered-user
+-- roster (not just who's online right now, which useOnlineUsers/presence
+-- already covers). auth.users lives in the `auth` schema, which isn't
+-- exposed through PostgREST and has no policies of its own reachable from
+-- the client, so there's normally no way to query it at all from the
+-- browser - security definer is what lets this one function reach in and
+-- read it anyway, same mechanism join_shared_diagram already relies on
+-- above. The email check inside (rather than a `grant execute` restricted
+-- to some role) is what actually keeps this owner-only, since `authenticated`
+-- covers every signed-in user - matches "owner can view all feedback"
+-- above, hardcoding the same address for the same reason (see that policy's
+-- own comment on why: keep this in sync with OWNER_EMAIL in
+-- src/lib/ownerEmail.js by hand, there's no shared source of truth between
+-- SQL and the app).
+create function admin_list_users()
+returns table (id uuid, email text, created_at timestamptz, last_sign_in_at timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.jwt() ->> 'email' <> 'eurikasomada@gmail.com' then
+    raise exception 'Not authorized' using errcode = 'AU001';
+  end if;
+  return query
+    select u.id, u.email::text, u.created_at, u.last_sign_in_at
+    from auth.users u
+    order by u.created_at desc;
+end;
+$$;
+
+grant execute on function admin_list_users() to authenticated;
+
+-- Optional star rating (1-5) alongside a feedback message - nullable since
+-- older rows (submitted before this existed) have none, and a submitter can
+-- still send feedback without picking one (e.g. a bug report doesn't
+-- naturally map to a satisfaction score the way a suggestion might). No RLS
+-- change needed - it's just another column on a row the existing
+-- insert/select/delete policies already govern.
+alter table feedback add column rating smallint check (rating is null or rating between 1 and 5);

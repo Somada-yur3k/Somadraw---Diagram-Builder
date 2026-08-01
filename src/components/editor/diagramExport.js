@@ -67,13 +67,17 @@ function safeFileName(name) {
   return trimmed || 'diagram'
 }
 
-// A collaborator's live cursor marker (see EditorCanvas.jsx) is part of
-// this same canvas node but has no business showing up as a stray colored
-// arrow in an export. filter() walks every node in the tree, including
-// plain text nodes (no .dataset on those), so this has to check that the
-// property exists before checking what's in it.
-function excludeLiveCursors(node) {
-  return !(node.dataset && 'liveCursor' in node.dataset)
+// Editing-only chrome that happens to live inside this same canvas node but
+// has no business baked into an export - a collaborator's live cursor
+// marker (EditorCanvas.jsx), or ArrowCardinalityPickers.jsx's floating
+// start/end cardinality chips, which only render while their arrow is
+// currently selected. Both are marked with the same data-export-hidden
+// flag rather than each needing their own bespoke filter here. filter()
+// walks every node in the tree, including plain text nodes (no .dataset on
+// those), so this has to check that the property exists before checking
+// what's in it.
+function excludeExportHiddenNodes(node) {
+  return !(node.dataset && 'exportHidden' in node.dataset)
 }
 
 // Shared by both export formats below - rasterizes canvasNode (the live
@@ -136,7 +140,7 @@ async function captureDiagramCanvas({ canvasNode, shapes, shapeOrder }) {
       // export, regardless of whether it's currently toggled on.
       backgroundImage: 'none',
     },
-    filter: excludeLiveCursors,
+    filter: excludeExportHiddenNodes,
   })
 
   return { canvas, contentWidth, contentHeight }

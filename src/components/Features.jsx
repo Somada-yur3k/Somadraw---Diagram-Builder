@@ -1,16 +1,14 @@
 const features = [
   {
     title: 'Spacious pan & zoom canvas',
-    description:
-      'A generous, distraction-free canvas that pans and zooms smoothly, giving every system room to grow.',
+    description: 'Smooth pan and zoom, with room for any system to grow.',
     icon: (
       <path d="M4 8V5a1 1 0 0 1 1-1h3M20 8V5a1 1 0 0 0-1-1h-3M4 16v3a1 1 0 0 0 1 1h3M20 16v3a1 1 0 0 1-1 1h-3" />
     ),
   },
   {
     title: 'DFD-aware shapes',
-    description:
-      'Purpose-built shapes for entities, processes, and data stores — so every diagram reads like a real Data Flow Diagram.',
+    description: 'Entity, process, and data store shapes — reads like a real DFD.',
     icon: (
       <>
         <rect x="3.5" y="4" width="7" height="5" rx="1.5" />
@@ -21,8 +19,7 @@ const features = [
   },
   {
     title: 'Smart connectors, your way',
-    description:
-      'Edges auto-route between shapes by default, or drag the middle segment to reroute manually — double-click to snap back to auto.',
+    description: 'Auto-routes by default, or drag to reroute anytime.',
     icon: (
       <>
         <circle cx="5" cy="6" r="2" />
@@ -33,8 +30,7 @@ const features = [
   },
   {
     title: 'Full style control',
-    description:
-      'Fine-tune corner radius, fill color, and text styling on any shape or connector label to match how you think.',
+    description: 'Corner radius, fill color, and text — tuned your way.',
     icon: (
       <>
         <path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21" />
@@ -44,8 +40,7 @@ const features = [
   },
   {
     title: 'Personal, autosaved workspace',
-    description:
-      'Sign in with Google and every diagram saves automatically to your own private workspace — organize, rename, and revisit anytime.',
+    description: 'Sign in with Google — every diagram autosaves, privately.',
     icon: (
       <>
         <circle cx="12" cy="12" r="8" />
@@ -55,8 +50,7 @@ const features = [
   },
   {
     title: 'PDF export',
-    description:
-      'Export any diagram to a clean PDF, ready to share or drop into a doc.',
+    description: 'A clean, ready-to-share PDF in one click.',
     icon: (
       <>
         <path d="M6 3h9l3 3v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
@@ -79,8 +73,8 @@ function Features() {
             Everything a data flow deserves
           </h2>
           <p className="text-[17px] leading-relaxed text-soft">
-            Somadraw pairs a distraction-free canvas with the structure of a
-            real DFD, so diagrams stay accurate as your system evolves.
+            A distraction-free canvas with the structure of a real DFD —
+            built to stay accurate as your system grows.
           </p>
         </div>
 

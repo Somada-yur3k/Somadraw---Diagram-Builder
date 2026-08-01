@@ -3,11 +3,6 @@ import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { formatRemaining } from '../lib/timeFormat'
 
-const FEEDBACK_TYPES = [
-  { key: 'suggestion', label: 'Suggestion' },
-  { key: 'bug', label: 'Bug report' },
-]
-
 const COOLDOWN_MS = 60 * 60 * 1000
 // Matches the errcode the feedback_rate_limit() Postgres trigger raises
 // (see supabase/schema.sql) - a distinct SQLSTATE rather than matching
@@ -15,9 +10,60 @@ const COOLDOWN_MS = 60 * 60 * 1000
 // wording changes later.
 const RATE_LIMIT_ERRCODE = 'RL001'
 
+function StarIcon({ filled }) {
+  return (
+    <svg
+      width="19"
+      height="19"
+      viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <path d="m12 2.5 2.9 6.34 6.85.72-5.1 4.86 1.4 6.98L12 17.9l-6.05 3.5 1.4-6.98-5.1-4.86 6.85-.72Z" />
+    </svg>
+  )
+}
+
+// Optional (see rating's own column comment in schema.sql) - clicking the
+// star already marking the current rating clears it back to "not rated"
+// (0) rather than being stuck once set, same reasoning most star-rating
+// widgets support a clear/undo gesture. Hover previews the value a click
+// would commit without actually changing `value` until it does.
+function StarRating({ value, onChange, disabled }) {
+  const [hovered, setHovered] = useState(0)
+  const display = hovered || value
+
+  return (
+    <div
+      className="flex items-center gap-0.5"
+      onMouseLeave={() => setHovered(0)}
+    >
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          disabled={disabled}
+          onMouseEnter={() => setHovered(star)}
+          onClick={() => onChange(value === star ? 0 : star)}
+          title={`${star} star${star === 1 ? '' : 's'}`}
+          aria-label={`Rate ${star} star${star === 1 ? '' : 's'}`}
+          aria-pressed={value === star}
+          className={`transition-transform hover:scale-110 disabled:pointer-events-none disabled:opacity-60 ${
+            star <= display ? 'text-amber-400' : 'text-line'
+          }`}
+        >
+          <StarIcon filled={star <= display} />
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function FeedbackForm({ user }) {
-  const [type, setType] = useState('suggestion')
   const [message, setMessage] = useState('')
+  const [rating, setRating] = useState(0)
   const [status, setStatus] = useState('idle') // idle | sending | sent | error
   // Timestamp (ms) the user can next submit at, or null if unknown/clear.
   // Seeded from their last real submission (fetched on mount) so the
@@ -79,9 +125,12 @@ function FeedbackForm({ user }) {
     if (!trimmed || !user || onCooldown) return
 
     setStatus('sending')
+    // No `type` field sent - the column still exists (schema.sql) and
+    // defaults to 'suggestion' on its own, now that there's no bug/
+    // suggestion toggle here to actually choose one.
     const { error } = await supabase
       .from('feedback')
-      .insert({ email: user.email, type, message: trimmed })
+      .insert({ email: user.email, message: trimmed, rating: rating || null })
 
     if (error) {
       setStatus(error.code === RATE_LIMIT_ERRCODE ? 'idle' : 'error')
@@ -89,35 +138,18 @@ function FeedbackForm({ user }) {
       return
     }
     setMessage('')
+    setRating(0)
     setStatus('sent')
     setCooldownUntil(Date.now() + COOLDOWN_MS)
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-16">
-      <h2 className="text-[13px] font-semibold text-ink">Send feedback</h2>
+    <form onSubmit={handleSubmit} className="mt-16 rounded-2xl border border-line bg-surface-soft/40 p-5">
+      <h2 className="text-[14px] font-semibold text-ink">Feedback</h2>
       <p className="mt-1 text-[12px] text-soft">
-        Found a bug or have a suggestion? It goes straight to the developer.
-        Limited to one message per hour.
+        Share your thoughts - it goes straight to the developer. Limited to
+        one message per hour.
       </p>
-
-      <div className="mt-3 flex gap-2">
-        {FEEDBACK_TYPES.map((option) => (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => setType(option.key)}
-            aria-pressed={type === option.key}
-            className={`rounded-lg px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
-              type === option.key
-                ? 'bg-brand-purple/10 text-brand-purple'
-                : 'text-body hover:bg-surface-soft hover:text-ink'
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
 
       <textarea
         value={message}
@@ -126,16 +158,13 @@ function FeedbackForm({ user }) {
           if (status === 'sent' || status === 'error') setStatus('idle')
         }}
         disabled={onCooldown}
-        placeholder={
-          type === 'bug'
-            ? "What happened, and what did you expect instead?"
-            : "What would make Somadraw better for you?"
-        }
+        placeholder="What should we improve in Somadraw?"
         rows={4}
-        className="mt-3 w-full resize-none rounded-lg bg-surface-soft px-3 py-2.5 text-[12.5px] text-ink outline-none placeholder:text-soft disabled:opacity-60"
+        className="mt-3 w-full resize-none rounded-xl border border-line bg-white px-3.5 py-3 text-[12.5px] text-ink outline-none placeholder:text-soft disabled:opacity-60"
       />
 
-      <div className="mt-3 flex items-center justify-between">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <StarRating value={rating} onChange={setRating} disabled={onCooldown} />
         <button
           type="submit"
           disabled={!message.trim() || status === 'sending' || onCooldown}
@@ -143,7 +172,9 @@ function FeedbackForm({ user }) {
         >
           {status === 'sending' ? 'Sending…' : 'Send feedback'}
         </button>
+      </div>
 
+      <div className="mt-2">
         {status === 'sent' ? (
           <span className="text-[12px] font-medium text-emerald-600">
             Thanks — your feedback was sent.

@@ -8,8 +8,7 @@ function CtaSection({ onSignIn, isSigningIn }) {
           Ready to draw your first <span className="gradient-text">flow</span>?
         </h2>
         <p className="max-w-md text-[16px] leading-relaxed text-soft">
-          Free to start. Sign in with your Google account and start building
-          diagrams that actually feel alive.
+          Free to start — sign in with Google and start building.
         </p>
 
         <button

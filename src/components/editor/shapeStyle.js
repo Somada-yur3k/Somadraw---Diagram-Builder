@@ -35,6 +35,7 @@ export const DEFAULT_CORNER_RADIUS_BY_TYPE = {
   swimlaneV3: 8,
   swimlaneH1: 8,
   swimlaneH2: 8,
+  erdTable: 8,
 }
 
 export const MIN_CORNER_RADIUS = 0
@@ -77,4 +78,10 @@ export const DEFAULT_FILL_COLOR_BY_TYPE = {
   swimlaneV3: '#0891b2',
   swimlaneH1: '#0891b2',
   swimlaneH2: '#0891b2',
+  // Same slate as umlClass - both are "structural/schema" container shapes
+  // (header + compartments), so they share an accent by default. Only the
+  // header itself is solid-filled with this color (see Shape.jsx's own
+  // comment on erdTable) - the rest of the card stays the plain white/border
+  // look every other container here already uses.
+  erdTable: '#64748b',
 }

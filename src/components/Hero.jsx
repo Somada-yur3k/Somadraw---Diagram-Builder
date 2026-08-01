@@ -1,13 +1,6 @@
 import GoogleGlyph from './GoogleGlyph'
 import DfdMockup from './DfdMockup'
 
-const bullets = [
-  'Spacious pan-and-zoom canvas with auto-routing edges',
-  'DFD-aware shapes: entity, process, data store & more',
-  'Manual connector routing & full style control',
-  'Private, autosaved workspace + PDF export',
-]
-
 function FloatingPill({ className = '', dotClassName = '', children }) {
   return (
     <div
@@ -75,25 +68,12 @@ function Hero({ onSignIn, isSigningIn, authError }) {
             you think.
           </h1>
 
-          <p className="mt-6 max-w-lg text-[17px] leading-relaxed text-body">
-            Somadraw is a purpose-built Data Flow Diagram builder. Sketch
-            systems on a spacious canvas, connect processes with smart
-            auto-routing edges, and keep every diagram safely saved to your
-            own private workspace — no clunky shapes, no setup friction.
+          <p className="mt-6 max-w-md text-[17px] leading-relaxed text-body">
+            A purpose-built Data Flow Diagram builder. Sketch, connect, and
+            save to your own private workspace — no clunky shapes, no setup.
           </p>
 
-          <ul className="mt-8 grid max-w-lg grid-cols-1 gap-3 sm:grid-cols-2">
-            {bullets.map((bullet) => (
-              <li key={bullet} className="flex items-start gap-2.5">
-                <span className="gradient-bg mt-2 h-1.5 w-1.5 shrink-0 rounded-full" />
-                <span className="text-[14.5px] leading-snug text-body">
-                  {bullet}
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-10 flex flex-wrap items-center gap-6">
+          <div className="mt-9 flex flex-wrap items-center gap-6">
             <button
               type="button"
               onClick={() => onSignIn()}
