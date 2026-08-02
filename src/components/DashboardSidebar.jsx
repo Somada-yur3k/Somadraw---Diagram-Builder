@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router'
 import somadrawLogo from '../assets/SomadrawLogo.png'
 import { supabase } from '../lib/supabaseClient'
 import { usePopoverState } from '../lib/usePopoverState'

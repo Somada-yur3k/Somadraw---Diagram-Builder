@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext } from 'react-router'
 import { supabase } from '../lib/supabaseClient'
 import { formatRemaining } from '../lib/timeFormat'
 
@@ -208,7 +208,7 @@ function DeveloperInfoView() {
 
         <div className="mt-6">
           <p className="text-[13px] font-medium text-ink">Eurika Adamos</p>
-          <p className="mt-0.5 text-[12px] text-soft">BSIT-MI, 3rd Year</p>
+          <p className="mt-0.5 text-[12px] text-soft">BSIT-MI</p>
           <p className="text-[12px] text-soft">National University Fairview</p>
         </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router'
 import { supabase } from './lib/supabaseClient'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'

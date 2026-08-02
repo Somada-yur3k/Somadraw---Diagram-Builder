@@ -396,3 +396,73 @@ grant execute on function admin_list_users() to authenticated;
 -- change needed - it's just another column on a row the existing
 -- insert/select/delete policies already govern.
 alter table feedback add column rating smallint check (rating is null or rating between 1 and 5);
+
+-- Backs the Monitor page's "Security" section - the two violations this
+-- app already detects (feedback_rate_limit()'s RL001, admin_list_users()'s
+-- AU001 below) used to just raise an exception and leave nothing behind;
+-- both now log a row here first. No insert policy on purpose - same "only
+-- a security definer function can write" shape as diagram_collaborators
+-- above, so a client can never insert a fake event directly, only these
+-- two functions can, and only when their own violation condition is
+-- actually true.
+create table security_events (
+  id uuid primary key default gen_random_uuid(),
+  event_type text not null check (event_type in ('rate_limit_hit', 'unauthorized_admin_call')),
+  user_id uuid references auth.users(id) on delete set null,
+  email text,
+  detail text,
+  created_at timestamptz not null default now()
+);
+
+create index security_events_created_at_idx on security_events (created_at desc);
+
+alter table security_events enable row level security;
+
+create policy "owner can view security events" on security_events for select
+  using (auth.jwt() ->> 'email' = 'eurikasomada@gmail.com');
+
+-- Redefined (was a plain SECURITY INVOKER function) to log a
+-- rate_limit_hit row before raising. Its own pre-existing check never
+-- needed elevated privilege - a user's own RLS-granted visibility into
+-- their own feedback rows already covered it - only the *new* insert into
+-- security_events does, since regular users have no policy letting them
+-- write there.
+create or replace function feedback_rate_limit() returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if exists (
+    select 1 from feedback
+    where user_id = new.user_id
+      and created_at > now() - interval '1 hour'
+  ) then
+    insert into security_events (event_type, user_id, email, detail)
+    values ('rate_limit_hit', new.user_id, new.email, 'Feedback rate limit (1/hour) exceeded');
+    raise exception 'You can only send feedback once per hour.' using errcode = 'RL001';
+  end if;
+  return new;
+end;
+$$;
+
+-- Redefined to log an unauthorized_admin_call row before raising -
+-- already security definer, no privilege change, just new logic.
+create or replace function admin_list_users()
+returns table (id uuid, email text, created_at timestamptz, last_sign_in_at timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.jwt() ->> 'email' <> 'eurikasomada@gmail.com' then
+    insert into security_events (event_type, user_id, email, detail)
+    values ('unauthorized_admin_call', auth.uid(), auth.jwt() ->> 'email', 'Called admin_list_users()');
+    raise exception 'Not authorized' using errcode = 'AU001';
+  end if;
+  return query
+    select u.id, u.email::text, u.created_at, u.last_sign_in_at
+    from auth.users u
+    order by u.created_at desc;
+end;
+$$;

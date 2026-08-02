@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router'
 import { supabase } from '../lib/supabaseClient'
 import { getDisplayUser } from '../lib/userDisplay'
 import LoadingScreen from './LoadingScreen'

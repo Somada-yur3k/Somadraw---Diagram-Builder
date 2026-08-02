@@ -75,6 +75,119 @@ function FeedbackTypeBadge({ type }) {
   )
 }
 
+// Status colors, not categorical ones - these describe a state's severity,
+// not a rotating identity, so the same amber/rose the rest of the app
+// already reserves for warning/danger applies here too rather than a new
+// pair. An unauthorized admin call is the more severe of the two (a real
+// auth-bypass attempt, however unlikely to succeed) - a rate-limit hit is
+// far more likely to just be an eager double-submit.
+function SecurityEventBadge({ type }) {
+  const isUnauthorized = type === 'unauthorized_admin_call'
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+        isUnauthorized ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'
+      }`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${isUnauthorized ? 'bg-rose-500' : 'bg-amber-500'}`} />
+      {isUnauthorized ? 'Unauthorized attempt' : 'Rate limit hit'}
+    </span>
+  )
+}
+
+function UsersIcon({ className = '' }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 ${className}`}>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+
+function ShieldIcon({ className = '' }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 ${className}`}>
+      <path d="M12 2 4 5v6c0 5.25 3.4 9.74 8 11 4.6-1.26 8-5.75 8-11V5Z" />
+    </svg>
+  )
+}
+
+function FeedbackIcon({ className = '' }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 ${className}`}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />
+    </svg>
+  )
+}
+
+// The category this section lives under - shown once per section (not
+// repeated per nav item, see MonitorNav below) so the active tab's own
+// page still reads clearly if the sidebar nav is ever out of view (e.g.
+// scrolled past on the horizontal mobile layout).
+function CategoryHeader({ icon, title, subtitle }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2.5">
+        {icon}
+        <h1 className="text-[20px] font-bold tracking-tight text-ink">{title}</h1>
+      </div>
+      <p className="mt-1 text-[12.5px] text-soft">{subtitle}</p>
+    </div>
+  )
+}
+
+// The sidebar's own nav item - same active/hover treatment as
+// DashboardSidebar's `itemClass` (bg-surface-soft when active, a hover
+// tint otherwise), reused here for visual consistency between the two
+// admin-ish surfaces even though this page never imports that one
+// (MonitorPage is a deliberately separate bundle - see this file's own
+// top comment).
+function MonitorNavItem({ icon, label, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={`flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] font-medium transition-colors md:w-full ${
+        active ? 'bg-surface-soft text-ink' : 'text-body hover:bg-surface-soft hover:text-ink'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  )
+}
+
+// Horizontal scrollable row on mobile, vertical fixed sidebar from md up -
+// one set of markup for both rather than DashboardSidebar's separate
+// desktop/mobile-drawer components, since there's only 3 items here.
+function MonitorNav({ active, onChange }) {
+  return (
+    <nav className="flex gap-1 overflow-x-auto border-b border-line px-4 py-3 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:border-b-0 md:border-r md:px-3 md:py-6">
+      <MonitorNavItem
+        icon={<UsersIcon />}
+        label="User Activity"
+        active={active === 'users'}
+        onClick={() => onChange('users')}
+      />
+      <MonitorNavItem
+        icon={<FeedbackIcon />}
+        label="Feedback"
+        active={active === 'feedback'}
+        onClick={() => onChange('feedback')}
+      />
+      <MonitorNavItem
+        icon={<ShieldIcon />}
+        label="Security"
+        active={active === 'security'}
+        onClick={() => onChange('security')}
+      />
+    </nav>
+  )
+}
+
 function StarIcon({ filled }) {
   return (
     <svg
@@ -123,17 +236,292 @@ function StatTile({ label, value, accent }) {
   )
 }
 
+function UserActivitySection({ allUsers, allUsersLoading, onlineUsers, onlineEmails }) {
+  return (
+    <>
+      <CategoryHeader
+        icon={<UsersIcon className="text-brand-purple" />}
+        title="User Activity"
+        subtitle="Who's using Somadraw - live presence and the full roster."
+      />
+
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <StatTile
+          label="Registered users"
+          value={allUsersLoading ? '—' : allUsers.length.toLocaleString()}
+        />
+        <StatTile
+          label="Online now"
+          value={onlineUsers.length.toLocaleString()}
+          accent="text-emerald-600"
+        />
+      </div>
+
+      <h2 className="mt-12 text-lg font-semibold tracking-tight text-ink">Active Users</h2>
+      <p className="mt-1 text-[12.5px] text-soft">
+        Everyone currently signed in and using Somadraw, live.
+      </p>
+
+      <div className="mt-6">
+        {onlineUsers.length === 0 ? (
+          <p className="py-6 text-[12.5px] text-soft">No one else is online right now.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="border-b border-line">
+                  <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
+                    Status
+                  </th>
+                  <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
+                    Email
+                  </th>
+                  <th className="py-2 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
+                    Online since
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {onlineUsers.map((entry) => (
+                  <tr key={entry.email}>
+                    <td className="whitespace-nowrap py-2.5 pr-4">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Online
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-4 text-[12.5px] font-medium text-ink">
+                      {entry.email}
+                    </td>
+                    <td className="whitespace-nowrap py-2.5 text-[12px] text-soft">
+                      {formatElapsed(entry.online_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="mt-3 text-[12px] text-soft">
+        {onlineUsers.length} {onlineUsers.length === 1 ? 'person' : 'people'} online now.
+      </p>
+
+      <h2 className="mt-10 text-lg font-semibold tracking-tight text-ink">All Users</h2>
+      <p className="mt-1 text-[12.5px] text-soft">
+        Every account that has ever signed in, not just who's online right now.
+      </p>
+
+      <div className="mt-6">
+        {allUsersLoading ? (
+          <p className="py-6 text-[12.5px] text-soft">Loading…</p>
+        ) : allUsers.length === 0 ? (
+          <p className="py-6 text-[12.5px] text-soft">No registered users yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="border-b border-line">
+                  <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
+                    Status
+                  </th>
+                  <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
+                    Email
+                  </th>
+                  <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
+                    Joined
+                  </th>
+                  <th className="py-2 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
+                    Last seen
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {allUsers.map((entry) => {
+                  const isOnline = onlineEmails.has(entry.email)
+                  return (
+                    <tr key={entry.id}>
+                      <td className="whitespace-nowrap py-2.5 pr-4">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            isOnline ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-soft text-soft'
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-line'}`} />
+                          {isOnline ? 'Online' : 'Offline'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4 text-[12.5px] font-medium text-ink">
+                        {entry.email}
+                      </td>
+                      <td className="whitespace-nowrap py-2.5 pr-4 text-[12px] text-soft">
+                        {formatElapsed(entry.created_at)}
+                      </td>
+                      <td className="whitespace-nowrap py-2.5 text-[12px] text-soft">
+                        {entry.last_sign_in_at ? formatElapsed(entry.last_sign_in_at) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="mt-3 text-[12px] text-soft">
+        {allUsers.length} total {allUsers.length === 1 ? 'user' : 'users'}.
+      </p>
+    </>
+  )
+}
+
+function FeedbackSection({
+  feedback,
+  feedbackLoading,
+  averageRating,
+  deletingFeedbackId,
+  onDeleteFeedback,
+}) {
+  return (
+    <>
+      <CategoryHeader
+        icon={<FeedbackIcon className="text-sky-500" />}
+        title="Feedback"
+        subtitle="Suggestions and bug reports sent from the Developer settings page."
+      />
+
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <StatTile
+          label="Feedback received"
+          value={feedbackLoading ? '—' : feedback.length.toLocaleString()}
+        />
+        <StatTile label="Average rating" value={feedbackLoading ? '—' : averageRating} />
+      </div>
+
+      <div className="mt-10">
+        {feedbackLoading ? (
+          <p className="py-6 text-[12.5px] text-soft">Loading…</p>
+        ) : feedback.length === 0 ? (
+          <p className="py-6 text-[12.5px] text-soft">No feedback submitted yet.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {feedback.map((entry) => (
+              <li key={entry.id} className="py-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <FeedbackTypeBadge type={entry.type} />
+                    <StarDisplay value={entry.rating} />
+                    <span className="text-[12.5px] font-medium text-ink">{entry.email}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11.5px] text-soft">
+                      {formatElapsed(entry.created_at)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteFeedback(entry.id)}
+                      disabled={deletingFeedbackId === entry.id}
+                      title="Delete feedback"
+                      aria-label="Delete feedback"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-soft transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-[12.5px] leading-relaxed text-body">{entry.message}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
+  )
+}
+
+function SecuritySection({
+  securityEvents,
+  securityEventsLoading,
+  rateLimitHitCount,
+  unauthorizedAttemptCount,
+}) {
+  return (
+    <>
+      <CategoryHeader
+        icon={<ShieldIcon className="text-rose-500" />}
+        title="Security"
+        subtitle="Attempts to abuse or bypass the app's own protections."
+      />
+
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <StatTile
+          label="Rate limit hits"
+          value={securityEventsLoading ? '—' : rateLimitHitCount.toLocaleString()}
+          accent="text-amber-600"
+        />
+        <StatTile
+          label="Unauthorized attempts"
+          value={securityEventsLoading ? '—' : unauthorizedAttemptCount.toLocaleString()}
+          accent="text-rose-600"
+        />
+      </div>
+
+      <h2 className="mt-12 text-lg font-semibold tracking-tight text-ink">Security Events</h2>
+      <p className="mt-1 text-[12.5px] text-soft">
+        Logged automatically whenever an existing safeguard (the feedback rate
+        limit, or an owner-only function) is actually triggered.
+      </p>
+
+      <div className="mt-6">
+        {securityEventsLoading ? (
+          <p className="py-6 text-[12.5px] text-soft">Loading…</p>
+        ) : securityEvents.length === 0 ? (
+          <p className="py-6 text-[12.5px] text-soft">No security events yet.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {securityEvents.map((entry) => (
+              <li key={entry.id} className="py-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <SecurityEventBadge type={entry.event_type} />
+                    <span className="text-[12.5px] font-medium text-ink">
+                      {entry.email || 'Unknown'}
+                    </span>
+                  </div>
+                  <span className="text-[11.5px] text-soft">
+                    {formatElapsed(entry.created_at)}
+                  </span>
+                </div>
+                {entry.detail && (
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-body">{entry.detail}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </>
+  )
+}
+
 // The actual monitoring content - only ever mounted once MonitorPage has
 // already confirmed `user` is signed in as OWNER_EMAIL, so no further
 // gating needed here (unlike the old MonitorUsersView, which had to check
 // this itself since a stray URL visit could otherwise land here directly).
 function MonitorContent({ user }) {
   const onlineUsers = useOnlineUsers(user)
+  const [activeCategory, setActiveCategory] = useState('users')
   const [feedback, setFeedback] = useState([])
   const [feedbackLoading, setFeedbackLoading] = useState(true)
   const [allUsers, setAllUsers] = useState([])
   const [allUsersLoading, setAllUsersLoading] = useState(true)
   const [deletingFeedbackId, setDeletingFeedbackId] = useState(null)
+  const [securityEvents, setSecurityEvents] = useState([])
+  const [securityEventsLoading, setSecurityEventsLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -170,7 +558,32 @@ function MonitorContent({ user }) {
     }
   }, [])
 
+  // Logged automatically by feedback_rate_limit()/admin_list_users()
+  // (schema.sql) the moment either violation actually happens - see their
+  // own comments there. "owner can view security events" RLS policy means
+  // this comes back empty for anyone but the owner regardless of this
+  // component's own gate.
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('security_events')
+      .select('id, event_type, email, detail, created_at')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        setSecurityEvents(error ? [] : (data ?? []))
+        setSecurityEventsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const onlineEmails = new Set(onlineUsers.map((entry) => entry.email))
+  const rateLimitHitCount = securityEvents.filter((entry) => entry.event_type === 'rate_limit_hit').length
+  const unauthorizedAttemptCount = securityEvents.filter(
+    (entry) => entry.event_type === 'unauthorized_admin_call',
+  ).length
 
   // Only averages entries that actually carry a rating (schema.sql's
   // feedback.rating is optional - see its own comment) - a submitter who
@@ -197,184 +610,34 @@ function MonitorContent({ user }) {
   return (
     <div className="min-h-screen bg-white">
       <PageHeader />
-      <div className="px-6 py-16">
-        <div className="mx-auto w-full max-w-3xl">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile
-              label="Registered users"
-              value={allUsersLoading ? '—' : allUsers.length.toLocaleString()}
-            />
-            <StatTile
-              label="Online now"
-              value={onlineUsers.length.toLocaleString()}
-              accent="text-emerald-600"
-            />
-            <StatTile
-              label="Feedback received"
-              value={feedbackLoading ? '—' : feedback.length.toLocaleString()}
-            />
-            <StatTile label="Average rating" value={feedbackLoading ? '—' : averageRating} />
-          </div>
-
-          <h1 className="mt-12 text-lg font-semibold tracking-tight text-ink">Active Users</h1>
-          <p className="mt-1 text-[12.5px] text-soft">
-            Everyone currently signed in and using Somadraw, live.
-          </p>
-
-          <div className="mt-6">
-            {onlineUsers.length === 0 ? (
-              <p className="py-6 text-[12.5px] text-soft">No one else is online right now.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left">
-                  <thead>
-                    <tr className="border-b border-line">
-                      <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
-                        Status
-                      </th>
-                      <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
-                        Email
-                      </th>
-                      <th className="py-2 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
-                        Online since
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {onlineUsers.map((entry) => (
-                      <tr key={entry.email}>
-                        <td className="whitespace-nowrap py-2.5 pr-4">
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            Online
-                          </span>
-                        </td>
-                        <td className="py-2.5 pr-4 text-[12.5px] font-medium text-ink">
-                          {entry.email}
-                        </td>
-                        <td className="whitespace-nowrap py-2.5 text-[12px] text-soft">
-                          {formatElapsed(entry.online_at)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+      <div className="md:flex">
+        <MonitorNav active={activeCategory} onChange={setActiveCategory} />
+        <div className="min-w-0 flex-1 px-6 py-10 md:py-16">
+          <div className="mx-auto w-full max-w-3xl">
+            {activeCategory === 'users' && (
+              <UserActivitySection
+                allUsers={allUsers}
+                allUsersLoading={allUsersLoading}
+                onlineUsers={onlineUsers}
+                onlineEmails={onlineEmails}
+              />
             )}
-          </div>
-
-          <p className="mt-3 text-[12px] text-soft">
-            {onlineUsers.length} {onlineUsers.length === 1 ? 'person' : 'people'} online now.
-          </p>
-
-          <h2 className="mt-10 text-lg font-semibold tracking-tight text-ink">All Users</h2>
-          <p className="mt-1 text-[12.5px] text-soft">
-            Every account that has ever signed in, not just who's online right now.
-          </p>
-
-          <div className="mt-6">
-            {allUsersLoading ? (
-              <p className="py-6 text-[12.5px] text-soft">Loading…</p>
-            ) : allUsers.length === 0 ? (
-              <p className="py-6 text-[12.5px] text-soft">No registered users yet.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left">
-                  <thead>
-                    <tr className="border-b border-line">
-                      <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
-                        Status
-                      </th>
-                      <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
-                        Email
-                      </th>
-                      <th className="py-2 pr-4 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
-                        Joined
-                      </th>
-                      <th className="py-2 text-[10.5px] font-semibold uppercase tracking-wide text-soft">
-                        Last seen
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {allUsers.map((entry) => {
-                      const isOnline = onlineEmails.has(entry.email)
-                      return (
-                        <tr key={entry.id}>
-                          <td className="whitespace-nowrap py-2.5 pr-4">
-                            <span
-                              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                isOnline ? 'bg-emerald-50 text-emerald-700' : 'bg-surface-soft text-soft'
-                              }`}
-                            >
-                              <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-line'}`} />
-                              {isOnline ? 'Online' : 'Offline'}
-                            </span>
-                          </td>
-                          <td className="py-2.5 pr-4 text-[12.5px] font-medium text-ink">
-                            {entry.email}
-                          </td>
-                          <td className="whitespace-nowrap py-2.5 pr-4 text-[12px] text-soft">
-                            {formatElapsed(entry.created_at)}
-                          </td>
-                          <td className="whitespace-nowrap py-2.5 text-[12px] text-soft">
-                            {entry.last_sign_in_at ? formatElapsed(entry.last_sign_in_at) : '—'}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+            {activeCategory === 'feedback' && (
+              <FeedbackSection
+                feedback={feedback}
+                feedbackLoading={feedbackLoading}
+                averageRating={averageRating}
+                deletingFeedbackId={deletingFeedbackId}
+                onDeleteFeedback={handleDeleteFeedback}
+              />
             )}
-          </div>
-
-          <p className="mt-3 text-[12px] text-soft">
-            {allUsers.length} total {allUsers.length === 1 ? 'user' : 'users'}.
-          </p>
-
-          <h2 className="mt-10 text-lg font-semibold tracking-tight text-ink">Feedback</h2>
-          <p className="mt-1 text-[12.5px] text-soft">
-            Suggestions and bug reports sent from the Developer settings page.
-          </p>
-
-          <div className="mt-6">
-            {feedbackLoading ? (
-              <p className="py-6 text-[12.5px] text-soft">Loading…</p>
-            ) : feedback.length === 0 ? (
-              <p className="py-6 text-[12.5px] text-soft">No feedback submitted yet.</p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {feedback.map((entry) => (
-                  <li key={entry.id} className="py-3.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        <FeedbackTypeBadge type={entry.type} />
-                        <StarDisplay value={entry.rating} />
-                        <span className="text-[12.5px] font-medium text-ink">{entry.email}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[11.5px] text-soft">
-                          {formatElapsed(entry.created_at)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteFeedback(entry.id)}
-                          disabled={deletingFeedbackId === entry.id}
-                          title="Delete feedback"
-                          aria-label="Delete feedback"
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-soft transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-body">{entry.message}</p>
-                  </li>
-                ))}
-              </ul>
+            {activeCategory === 'security' && (
+              <SecuritySection
+                securityEvents={securityEvents}
+                securityEventsLoading={securityEventsLoading}
+                rateLimitHitCount={rateLimitHitCount}
+                unauthorizedAttemptCount={unauthorizedAttemptCount}
+              />
             )}
           </div>
         </div>
