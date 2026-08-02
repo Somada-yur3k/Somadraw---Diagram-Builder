@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router'
 import DashboardSidebar from './DashboardSidebar'
+import UsernamePrompt from './UsernamePrompt'
 
 function MenuIcon() {
   return (
@@ -13,6 +14,16 @@ function MenuIcon() {
 function Dashboard({ user, onSignOut }) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  // Local, not derived purely from `user.user_metadata` - closing this via
+  // Save/Skip calls supabase.auth.updateUser(), whose own session-refresh
+  // event isn't guaranteed to have already reached this component's props
+  // by the exact tick UsernamePrompt's onDone fires, which would otherwise
+  // risk a one-frame flicker of the modal reappearing before it does.
+  const [usernamePromptDismissed, setUsernamePromptDismissed] = useState(false)
+
+  const metadata = user?.user_metadata ?? {}
+  const showUsernamePrompt =
+    !usernamePromptDismissed && !metadata.username && !metadata.username_prompt_dismissed
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
@@ -42,6 +53,10 @@ function Dashboard({ user, onSignOut }) {
 
         <Outlet context={{ user }} />
       </div>
+
+      {showUsernamePrompt && (
+        <UsernamePrompt onDone={() => setUsernamePromptDismissed(true)} />
+      )}
     </div>
   )
 }

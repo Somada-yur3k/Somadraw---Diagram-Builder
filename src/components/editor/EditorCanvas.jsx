@@ -64,7 +64,7 @@ function rectsIntersect(a, b) {
 // correctly), but counter-scaled by 1/zoom so the marker and label stay a
 // constant, legible on-screen size instead of shrinking to a speck at low
 // zoom or ballooning at high zoom.
-function CursorMarker({ x, y, email, color, zoom }) {
+function CursorMarker({ x, y, name, email, color, zoom }) {
   return (
     <div
       // Lets diagramExport.js's filter exclude these from an export - a
@@ -82,7 +82,7 @@ function CursorMarker({ x, y, email, color, zoom }) {
         className="whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium text-white shadow-sm"
         style={{ backgroundColor: color }}
       >
-        {email}
+        {name || email}
       </span>
     </div>
   )
@@ -505,6 +505,7 @@ function EditorCanvas({ canvasNodeRef }) {
               key={cursor.clientId}
               x={cursor.x}
               y={cursor.y}
+              name={cursor.name}
               email={cursor.email}
               color={cursor.color}
               zoom={zoom}
