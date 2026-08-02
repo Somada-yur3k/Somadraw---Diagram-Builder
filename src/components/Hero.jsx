@@ -60,17 +60,18 @@ function Hero({ onSignIn, isSigningIn, authError }) {
         <div>
           <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3.5 py-1.5 text-[13px] font-medium text-body shadow-sm">
             <span className="gradient-bg h-1.5 w-1.5 rounded-full" />
-            New · Save diagrams to your workspace
+            Every diagram type, one canvas
           </span>
 
           <h1 className="mt-6 text-[42px] font-semibold leading-[1.08] tracking-tight text-ink sm:text-5xl lg:text-[52px]">
-            Draw <span className="gradient-text">data flows</span> the way
-            you think.
+            Diagram <span className="gradient-text">together</span>, in
+            real time.
           </h1>
 
           <p className="mt-6 max-w-md text-[17px] leading-relaxed text-body">
-            A purpose-built Data Flow Diagram builder. Sketch, connect, and
-            save to your own private workspace — no clunky shapes, no setup.
+            From DFDs and ERDs to UML, flowcharts, and use case diagrams —
+            sketch and refine together in real time, with every change
+            autosaved to your workspace.
           </p>
 
           <div className="mt-9 flex flex-wrap items-center gap-6">

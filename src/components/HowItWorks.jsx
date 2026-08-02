@@ -7,7 +7,7 @@ const steps = [
   {
     number: '02',
     title: 'Sketch your diagram',
-    description: 'Drop entity, process, and data store shapes, then connect them with auto-routing edges.',
+    description: 'Drop shapes for DFDs, ERDs, UML, flowcharts, or use case diagrams, then connect them with auto-routing edges.',
   },
   {
     number: '03',

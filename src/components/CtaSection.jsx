@@ -5,10 +5,10 @@ function CtaSection({ onSignIn, isSigningIn }) {
     <section className="relative py-20 sm:py-28">
       <div className="container flex flex-col items-center gap-6 text-center">
         <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-          Ready to draw your first <span className="gradient-text">flow</span>?
+          Ready to build your first <span className="gradient-text">diagram</span>?
         </h2>
         <p className="max-w-md text-[16px] leading-relaxed text-soft">
-          Free to start — sign in with Google and start building.
+          Free to start — sign in with Google and start building with your team.
         </p>
 
         <button

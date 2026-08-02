@@ -1,14 +1,19 @@
 const features = [
   {
-    title: 'Spacious pan & zoom canvas',
-    description: 'Smooth pan and zoom, with room for any system to grow.',
+    title: 'Real-time collaboration',
+    description: 'Live cursors show where teammates are working, with every edit synced instantly.',
     icon: (
-      <path d="M4 8V5a1 1 0 0 1 1-1h3M20 8V5a1 1 0 0 0-1-1h-3M4 16v3a1 1 0 0 0 1 1h3M20 16v3a1 1 0 0 1-1 1h-3" />
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </>
     ),
   },
   {
-    title: 'DFD-aware shapes',
-    description: 'Entity, process, and data store shapes — reads like a real DFD.',
+    title: 'Five diagram types, one canvas',
+    description: 'DFD, ERD, UML, flowchart, and use case diagrams — each with shapes that match real notation.',
     icon: (
       <>
         <rect x="3.5" y="4" width="7" height="5" rx="1.5" />
@@ -18,19 +23,15 @@ const features = [
     ),
   },
   {
-    title: 'Smart connectors, your way',
-    description: 'Auto-routes by default, or drag to reroute anytime.',
+    title: 'Spacious pan & zoom canvas',
+    description: 'Smooth pan and zoom, with room for any system to grow.',
     icon: (
-      <>
-        <circle cx="5" cy="6" r="2" />
-        <circle cx="19" cy="18" r="2" />
-        <path d="M7 7c3 1 8 6 10 10" strokeDasharray="2 2.5" />
-      </>
+      <path d="M4 8V5a1 1 0 0 1 1-1h3M20 8V5a1 1 0 0 0-1-1h-3M4 16v3a1 1 0 0 0 1 1h3M20 16v3a1 1 0 0 1-1 1h-3" />
     ),
   },
   {
-    title: 'Full style control',
-    description: 'Corner radius, fill color, and text — tuned your way.',
+    title: 'Full creative control',
+    description: 'Auto-routing connectors, corner radius, fill color, and text — all tuned exactly your way.',
     icon: (
       <>
         <path d="M12 3v3.5M12 17.5V21M3 12h3.5M17.5 12H21" />
@@ -66,15 +67,16 @@ function Features() {
     <section id="features" className="relative border-t border-line bg-white/70 py-20 sm:py-28">
       <div className="container">
         <div className="flex max-w-xl flex-col items-start gap-3 text-left">
-          <span className="gradient-text text-[13.5px] font-semibold uppercase tracking-wide">
-            Built for flow
+          <span className="text-[13.5px] font-medium text-brand-blue">
+            Built for teams
           </span>
           <h2 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            Everything a data flow deserves
+            Everything your team needs to diagram together
           </h2>
           <p className="text-[17px] leading-relaxed text-soft">
-            A distraction-free canvas with the structure of a real DFD —
-            built to stay accurate as your system grows.
+            A distraction-free canvas that adapts to DFDs, ERDs, UML,
+            flowcharts, and use case diagrams — accurate to real notation,
+            with teammates in sync the whole time.
           </p>
         </div>
 
@@ -84,7 +86,7 @@ function Features() {
               key={feature.title}
               className="group rounded-2xl border border-line bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
             >
-              <span className="gradient-bg inline-flex h-11 w-11 items-center justify-center rounded-full shadow-sm">
+              <span className="gradient-bg inline-flex h-11 w-11 items-center justify-center rounded-xl shadow-sm">
                 <svg
                   width="19"
                   height="19"
@@ -98,7 +100,7 @@ function Features() {
                   {feature.icon}
                 </svg>
               </span>
-              <h3 className="mt-5 text-[17px] font-semibold text-ink">
+              <h3 className="mt-4 text-[17px] font-semibold text-ink">
                 {feature.title}
               </h3>
               <p className="mt-2 text-[14.5px] leading-relaxed text-soft">
