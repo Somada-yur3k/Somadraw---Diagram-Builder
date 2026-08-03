@@ -110,7 +110,11 @@ const ArrowLabel = memo(function ArrowLabel({
           value={arrow.label}
           onCommit={(value) => dispatch({ type: 'RENAME_ARROW_LABEL', id: arrow.id, value })}
           placeholder="Add label"
-          className={`block whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[11px] font-medium shadow-sm ${
+          // whitespace-pre-wrap (not nowrap): honors manual line breaks
+          // (Shift+Enter in EditableText) so a label can span 2+ rows,
+          // while a single-line label with no "\n" in it still renders
+          // exactly as before (no width constraint here to force wrapping).
+          className={`block whitespace-pre-wrap rounded-md border px-1.5 py-0.5 text-center text-[11px] font-medium shadow-sm ${
             isSelected
               ? 'border-brand-purple/40 bg-white text-ink'
               : 'border-line bg-white text-body'

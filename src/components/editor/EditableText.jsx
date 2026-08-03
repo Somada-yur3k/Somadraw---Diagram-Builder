@@ -9,6 +9,24 @@ function selectAllText(el) {
   selection.addRange(range)
 }
 
+// Inserts a literal "\n" text node at the caret (rather than
+// document.execCommand, which is deprecated) so a plain-text commit via
+// .textContent picks it up as-is - no <br>/<div> normalization needed on
+// the way out. Rendering it as a visible line break is up to the caller's
+// className (e.g. whitespace-pre-wrap); this only affects the underlying text.
+function insertLineBreakAtCaret() {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return
+  const range = selection.getRangeAt(0)
+  range.deleteContents()
+  const newline = document.createTextNode('\n')
+  range.insertNode(newline)
+  range.setStartAfter(newline)
+  range.setEndAfter(newline)
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
 const DOUBLE_CLICK_MS = 400
 
 function EditableText({
@@ -76,7 +94,13 @@ function EditableText({
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
           event.preventDefault()
-          ref.current?.blur()
+          // Shift+Enter adds a row (2+ lines of text); plain Enter still
+          // commits and blurs, same as elsewhere.
+          if (event.shiftKey) {
+            insertLineBreakAtCaret()
+          } else {
+            ref.current?.blur()
+          }
         }
         if (event.key === 'Escape') {
           if (ref.current) ref.current.textContent = value
