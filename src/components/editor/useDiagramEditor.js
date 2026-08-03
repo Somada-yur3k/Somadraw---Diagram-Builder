@@ -168,8 +168,40 @@ function clampZoom(zoom) {
 // look like a different diagram than whatever was actually visible on
 // screen - not a rendering bug, but two different definitions of "where
 // content can be." This keeps them the same definition.
+//
+// The positive direction also needs its own ceiling, for a different reason:
+// every arrow shares one <svg> sized to bound *every* shape at once
+// (ArrowLayer's computeSvgBounds), sitting inside this canvas's own
+// transform: scale(zoom) ancestor (EditorCanvas). Drag just one shape far
+// enough out and that shared element balloons to tens of thousands of
+// pixels - browsers reliably fail to composite something that large/far
+// from a transformed ancestor's origin, so the whole arrow layer goes blank
+// at once, taking every *other* arrow down with it, not just the moved
+// shape's own. MAX_SHAPE_POSITION stays well clear of that failure range
+// while still far past anything a real diagram's content needs.
+const MAX_SHAPE_POSITION = 20000
+
 function clampShapePosition(x, y) {
-  return { x: Math.max(0, x), y: Math.max(0, y) }
+  return {
+    x: Math.min(MAX_SHAPE_POSITION, Math.max(0, x)),
+    y: Math.min(MAX_SHAPE_POSITION, Math.max(0, y)),
+  }
+}
+
+// A manually dragged route bend (SET_ARROW_ROUTE_OFFSET, from ArrowLayer's
+// route handle) is a plain unbounded canvas-coordinate nudge with no
+// relation to any shape - same runaway-growth risk MAX_SHAPE_POSITION
+// exists for above, just reached by dragging a bend instead of a shape.
+// ArrowLayer's computeSvgBounds now grows to fit wherever a route actually
+// goes (so an offset like this no longer gets silently clipped out of the
+// svg), but an unbounded drag could still balloon that shared element past
+// what a browser can composite, same failure as before. This keeps a
+// dragged bend far past anything a real diagram needs while staying well
+// clear of that failure range.
+const MAX_ROUTE_OFFSET = 4000
+
+function clampRouteOffset(offset) {
+  return Math.min(MAX_ROUTE_OFFSET, Math.max(-MAX_ROUTE_OFFSET, offset))
 }
 
 // `initialData` is the diagram row's `data` column, already fetched by
@@ -557,10 +589,11 @@ function reducer(state, action) {
     case 'SET_ARROW_ROUTE_OFFSET': {
       const arrow = state.arrows[action.id]
       if (!arrow) return state
-      if ((arrow.routeMidOffset ?? 0) === action.offset) return state
+      const offset = clampRouteOffset(action.offset)
+      if ((arrow.routeMidOffset ?? 0) === offset) return state
       return {
         ...state,
-        arrows: { ...state.arrows, [action.id]: { ...arrow, routeMidOffset: action.offset } },
+        arrows: { ...state.arrows, [action.id]: { ...arrow, routeMidOffset: offset } },
       }
     }
 

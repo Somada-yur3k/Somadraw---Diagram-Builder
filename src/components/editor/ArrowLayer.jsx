@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { computeArrowRoute, containsPoint, nearestBorderPoint } from './arrowRouting'
 import { ERD_CARDINALITY_MARKER_ID } from './erdCardinality'
@@ -37,7 +37,16 @@ const ROUTE_HANDLE_OFFSET = 30
 // overflow:visible, which every consumer of this SVG (a browser painting it
 // live, or an export library rasterizing it) would otherwise need to honor
 // correctly on its own.
-function computeSvgBounds(shapes, shapeOrder) {
+// routedArrows' start/end/midSegment points are folded in alongside the
+// shapes' own boxes - a manually dragged route bend (routeMidOffset, see
+// ArrowLayer's beginRouteDrag) is a plain unclamped canvas-coordinate nudge
+// with no relation to any shape's position, so a big enough drag pushes
+// that leg past every shape's box plus the flat SVG_PADDING margin. Since
+// this SVG (like any SVG) clips its own content to its viewBox, a route
+// point that's allowed to fall outside these bounds simply doesn't render -
+// not just dimmed or off-canvas-but-scrollable-to, gone - taking that
+// segment and its label (anchored to the same point) with it.
+function computeSvgBounds(shapes, shapeOrder, routedArrows) {
   if (shapeOrder.length === 0) {
     return { minX: 0, minY: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT }
   }
@@ -51,6 +60,18 @@ function computeSvgBounds(shapes, shapeOrder) {
     minY = Math.min(minY, shape.y)
     maxX = Math.max(maxX, shape.x + shape.width)
     maxY = Math.max(maxY, shape.y + shape.height)
+  }
+  for (const { start, end, midSegment } of routedArrows) {
+    minX = Math.min(minX, start.x, end.x)
+    minY = Math.min(minY, start.y, end.y)
+    maxX = Math.max(maxX, start.x, end.x)
+    maxY = Math.max(maxY, start.y, end.y)
+    if (midSegment) {
+      minX = Math.min(minX, midSegment.x1, midSegment.x2)
+      minY = Math.min(minY, midSegment.y1, midSegment.y2)
+      maxX = Math.max(maxX, midSegment.x1, midSegment.x2)
+      maxY = Math.max(maxY, midSegment.y1, midSegment.y2)
+    }
   }
   return {
     minX: minX - SVG_PADDING,
@@ -112,10 +133,6 @@ const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, di
           event.stopPropagation()
           dispatch({ type: 'SELECT', kind: 'arrow', id: arrow.id })
         }}
-        onDoubleClick={(event) => {
-          event.stopPropagation()
-          dispatch({ type: 'RESET_ARROW_ROUTE', id: arrow.id })
-        }}
       />
       <path
         d={d}
@@ -134,10 +151,6 @@ const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, di
 function ArrowLayer() {
   const { state, dispatch } = useDiagramEditorContext()
   const zoom = state.viewport.zoom
-  const svgBounds = useMemo(
-    () => computeSvgBounds(state.shapes, state.shapeOrder),
-    [state.shapes, state.shapeOrder],
-  )
   const svgRef = useRef(null)
   const dragRef = useRef(null)
   const routeDragRef = useRef(null)
@@ -166,6 +179,12 @@ function ArrowLayer() {
     )
     return { arrow, isSelected, d, start, end, midSegment }
   })
+
+  // Not wrapped in useMemo: routedArrows above is already a fresh array
+  // every render (visibleArrows is rebuilt from scratch each time too), so
+  // memoizing just this step would recompute on every render anyway - no
+  // benefit worth the indirection.
+  const svgBounds = computeSvgBounds(state.shapes, state.shapeOrder, routedArrows)
 
   // This SVG's own top-left corner no longer sits at the canvas's (0, 0) -
   // it's offset to svgBounds.minX/minY (see computeSvgBounds) - so a point
