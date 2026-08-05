@@ -15,6 +15,7 @@ import jsPDF from 'jspdf'
 // animation's settled opacity/transform and oklch colors as real color
 // values) rather than re-deriving how to paint it.
 import { toCanvas } from 'html-to-image'
+import { computeArrowRoute } from './arrowRouting'
 
 // Canvas-logical px of breathing room kept around the shapes' own bounding
 // box - without this the crop would clip right against the outermost
@@ -42,7 +43,16 @@ const PAGE_MARGIN_MM = 10
 // clampShapePosition in useDiagramEditor.js) but not to any upper bound, so
 // a diagram dragged well past the nominal box in the positive direction is
 // still legitimate content this needs to fully include.
-function contentBounds(shapes, shapeOrder) {
+//
+// Also folds in each arrow's actual routed points (start/end/mid-bend) and
+// label position - same reasoning as ArrowLayer's own computeSvgBounds. A
+// manually dragged route bend (routeMidOffset) or label (labelOffsetX/Y) is
+// an unbounded nudge with no relation to any shape's box, so a big enough
+// drag lands outside a shapes-only bounding box - CONTENT_PADDING's flat
+// 200px was only ever sized for auto-routing's small STUB push-back, not a
+// manual drag. Without this, an export could silently crop out exactly the
+// part of the diagram someone just finished adjusting.
+function contentBounds(shapes, shapeOrder, arrows, arrowOrder) {
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity
@@ -53,6 +63,34 @@ function contentBounds(shapes, shapeOrder) {
     minY = Math.min(minY, shape.y)
     maxX = Math.max(maxX, shape.x + shape.width)
     maxY = Math.max(maxY, shape.y + shape.height)
+  }
+  for (const id of arrowOrder) {
+    const arrow = arrows[id]
+    const fromShape = arrow && shapes[arrow.fromId]
+    const toShape = arrow && shapes[arrow.toId]
+    if (!fromShape || !toShape) continue
+    const { start, end, midSegment, labelAnchor } = computeArrowRoute(
+      fromShape,
+      arrow.fromSide,
+      arrow.fromT,
+      toShape,
+      arrow.toSide,
+      arrow.toT,
+      arrow.routeMidOffset ?? 0,
+      arrow.connectorType ?? 'shape',
+    )
+    const labelX = labelAnchor.x + (arrow.labelOffsetX ?? 0)
+    const labelY = labelAnchor.y + (arrow.labelOffsetY ?? 0)
+    const xs = [start.x, end.x, labelX]
+    const ys = [start.y, end.y, labelY]
+    if (midSegment) {
+      xs.push(midSegment.x1, midSegment.x2)
+      ys.push(midSegment.y1, midSegment.y2)
+    }
+    minX = Math.min(minX, ...xs)
+    minY = Math.min(minY, ...ys)
+    maxX = Math.max(maxX, ...xs)
+    maxY = Math.max(maxY, ...ys)
   }
   return {
     left: minX - CONTENT_PADDING,
@@ -91,14 +129,14 @@ function excludeExportHiddenNodes(node) {
 // resamples again to whatever zoom level it's displaying at - one more
 // transformation, and one more place for thin strokes (arrows) to pick up
 // resampling artifacts a PNG never goes through.
-async function captureDiagramCanvas({ canvasNode, shapes, shapeOrder }) {
+async function captureDiagramCanvas({ canvasNode, shapes, shapeOrder, arrows, arrowOrder }) {
   // Secondary safeguard alongside html-to-image's own font-embedding (which
   // fetches and inlines whatever @font-face rules are actually in use) -
   // cheap and already resolved almost instantly once fonts have loaded, so
   // there's no reason to skip it.
   await document.fonts.ready
 
-  const bounds = contentBounds(shapes, shapeOrder)
+  const bounds = contentBounds(shapes, shapeOrder, arrows, arrowOrder)
   const contentWidth = bounds.right - bounds.left
   const contentHeight = bounds.bottom - bounds.top
 
@@ -162,8 +200,8 @@ function downloadDataUrl(dataUrl, fileName) {
 // further processing, so this is the most accurate representation of the
 // diagram export can produce. Prefer this over PDF unless a print-ready,
 // fixed-page-size document is specifically what's needed.
-export async function exportDiagramToPng({ canvasNode, shapes, shapeOrder, fileName }) {
-  const { canvas } = await captureDiagramCanvas({ canvasNode, shapes, shapeOrder })
+export async function exportDiagramToPng({ canvasNode, shapes, shapeOrder, arrows, arrowOrder, fileName }) {
+  const { canvas } = await captureDiagramCanvas({ canvasNode, shapes, shapeOrder, arrows, arrowOrder })
   downloadDataUrl(canvas.toDataURL('image/png'), `${safeFileName(fileName)}.png`)
 }
 
@@ -172,11 +210,13 @@ export async function exportDiagramToPng({ canvasNode, shapes, shapeOrder, fileN
 // with a small margin - meant for printing/submitting the diagram, not a
 // pixel-perfect screenshot of the whole editing surface (see
 // exportDiagramToPng for that).
-export async function exportDiagramToPdf({ canvasNode, shapes, shapeOrder, fileName }) {
+export async function exportDiagramToPdf({ canvasNode, shapes, shapeOrder, arrows, arrowOrder, fileName }) {
   const { canvas, contentWidth, contentHeight } = await captureDiagramCanvas({
     canvasNode,
     shapes,
     shapeOrder,
+    arrows,
+    arrowOrder,
   })
   const imgData = canvas.toDataURL('image/png')
 

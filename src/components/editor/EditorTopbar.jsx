@@ -427,6 +427,8 @@ function EditorTopbar({ canvasNodeRef }) {
         canvasNode: canvasNodeRef.current,
         shapes: state.shapes,
         shapeOrder: state.shapeOrder,
+        arrows: state.arrows,
+        arrowOrder: state.arrowOrder,
         fileName: diagramName,
       })
     } catch (error) {

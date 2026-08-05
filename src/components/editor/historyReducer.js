@@ -20,6 +20,59 @@ const CONTINUOUS_TYPES = new Set([
 
 const MAX_HISTORY = 100
 
+// Reused for shapes/arrows AND shapeOrder/arrowOrder below: keeps *this*
+// client's existing reference for any entry (or, for the order arrays, the
+// whole array) whose content is unchanged, instead of adopting the
+// freshly-deserialized copy from the wire wholesale. React.memo on
+// <Shape>/ArrowLayer's per-arrow component compares its own record prop by
+// reference (see Shape.jsx's own comment on why), and EditorCanvas/ArrowLayer
+// each memoize a bounds calculation keyed on [shapes, shapeOrder] - without
+// this, every throttled remote broadcast (up to ~20/sec while any
+// collaborator drags something) gave literally everything a new reference at
+// once, forcing every shape/arrow to re-render and every bounds recompute
+// regardless of whether any of it actually changed, not just whichever one
+// thing someone's actively moving.
+function contentEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function mergeById(current, incoming) {
+  let allSame = Object.keys(current).length === Object.keys(incoming).length
+  const next = {}
+  for (const id in incoming) {
+    const currentEntry = current[id]
+    if (currentEntry && contentEqual(currentEntry, incoming[id])) {
+      next[id] = currentEntry
+    } else {
+      next[id] = incoming[id]
+      allSame = false
+    }
+  }
+  return allSame ? current : next
+}
+
+function mergeOrder(current, incoming) {
+  if (current.length === incoming.length && current.every((id, i) => id === incoming[i])) {
+    return current
+  }
+  return incoming
+}
+
+// patch.shapes/arrows/shapeOrder/arrowOrder are always present on a patch
+// built from extractPersisted (useDiagramEditor.js) - but a patch can also
+// come straight from an older diagram row's saved `data` column (the
+// visibility-change refetch in useDiagramEditor.js), which predates a field
+// that's since been added, so this stays defensive rather than assuming.
+function mergeRemotePatch(present, patch) {
+  return {
+    ...patch,
+    ...(patch.shapes ? { shapes: mergeById(present.shapes, patch.shapes) } : null),
+    ...(patch.arrows ? { arrows: mergeById(present.arrows, patch.arrows) } : null),
+    ...(patch.shapeOrder ? { shapeOrder: mergeOrder(present.shapeOrder, patch.shapeOrder) } : null),
+    ...(patch.arrowOrder ? { arrowOrder: mergeOrder(present.arrowOrder, patch.arrowOrder) } : null),
+  }
+}
+
 function contentChanged(prev, next) {
   return (
     prev.shapes !== next.shapes ||
@@ -53,8 +106,10 @@ export function createHistoryReducer(contentReducer) {
     // undo history stays exclusively a record of your own actions.
     if (action.type === 'APPLY_REMOTE_STATE') {
       const { patch } = action
+      const present = history.present
+      const merged = mergeRemotePatch(present, patch)
       if (!history.isDragging) {
-        return { ...history, present: { ...history.present, ...patch } }
+        return { ...history, present: { ...present, ...merged } }
       }
 
       // Mid a local drag/resize/rotate. A remote snapshot reflects the
@@ -66,16 +121,15 @@ export function createHistoryReducer(contentReducer) {
       // exactly what's selected; everything else in the patch - including
       // brand new shapes/arrows the sender just added - still applies
       // immediately.
-      const present = history.present
       const selection = present.selection
-      const next = { ...present, ...patch }
-      if (selection?.kind === 'shape' && patch.shapes) {
-        next.shapes = { ...patch.shapes }
+      const next = { ...present, ...merged }
+      if (selection?.kind === 'shape' && merged.shapes) {
+        next.shapes = { ...merged.shapes }
         for (const id of selection.ids) {
           if (present.shapes[id]) next.shapes[id] = present.shapes[id]
         }
-      } else if (selection?.kind === 'arrow' && patch.arrows) {
-        next.arrows = { ...patch.arrows }
+      } else if (selection?.kind === 'arrow' && merged.arrows) {
+        next.arrows = { ...merged.arrows }
         if (present.arrows[selection.id]) next.arrows[selection.id] = present.arrows[selection.id]
       }
       return { ...history, present: next }

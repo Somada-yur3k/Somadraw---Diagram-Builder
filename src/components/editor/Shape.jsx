@@ -456,8 +456,11 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers }) {
         className="flex h-full w-full flex-col overflow-hidden rounded-2xl border-2 border-brand-purple"
         style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue }}
       >
+        {/* Just the process number, centered - no static "PROCESS" label
+            crowding it, matching the reference layout (a plain "1.0"-style
+            id bar sitting above the process's own name). */}
         <div
-          className="flex shrink-0 items-center gap-2 bg-brand-purple px-3 py-1.5"
+          className="flex shrink-0 items-center justify-center bg-brand-purple px-3 py-2.5"
           style={{ backgroundColor: fill || undefined }}
         >
           <EditableText
@@ -465,11 +468,8 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers }) {
             onCommit={commitField('badge')}
             placeholder="#"
             disableDblClick={disableDblClick}
-            className="min-w-3.5 text-[13px] font-extrabold leading-none text-white"
+            className="text-center text-[14px] font-bold leading-none text-white"
           />
-          <span className="text-[11px] font-bold uppercase tracking-wide leading-none text-white">
-            Process
-          </span>
         </div>
         <div
           className="flex flex-1 items-center justify-center bg-brand-purple/6 px-3 py-2"
@@ -481,7 +481,7 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers }) {
             placeholder="Process"
             placeholderOnlyWhileEditing
             disableDblClick={disableDblClick}
-            className="w-full text-center text-[14px] font-medium leading-snug text-ink"
+            className="w-full text-center text-[15px] font-medium leading-snug text-ink"
             style={textStyle}
           />
         </div>
