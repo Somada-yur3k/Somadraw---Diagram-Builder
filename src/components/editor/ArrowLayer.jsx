@@ -111,18 +111,37 @@ const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, di
   // ERD relationship notation: whichever crow's-foot/tick/circle glyph
   // each end's own startCardinality/endCardinality picks (see
   // ArrowCardinalityPickers.jsx and the erd-* marker defs below), instead
-  // of the plain triangle every other connector type uses. markerStart has
-  // no equivalent on the default triangle markers (arrows only ever
-  // pointed one way before ERD notation existed), so it's left undefined
-  // rather than an empty string for every other connector type.
+  // of the plain triangle every other connector type uses.
   const isErd = arrow.connectorType === 'erd'
   const endMarkerId = isErd ? ERD_CARDINALITY_MARKER_ID[arrow.endCardinality] ?? ERD_CARDINALITY_MARKER_ID.many : null
   const startMarkerId = isErd ? ERD_CARDINALITY_MARKER_ID[arrow.startCardinality] ?? ERD_CARDINALITY_MARKER_ID.one : null
-  const endMarker = endMarkerId ? `${endMarkerId}${isSelected ? '-selected' : ''}` : (isSelected ? 'arrowhead-selected' : 'arrowhead')
-  const startMarker = startMarkerId ? `${startMarkerId}${isSelected ? '-selected' : ''}` : null
+  // Non-ERD heads are independently toggleable (SET_ARROW_HEADS, see
+  // EditorTopbar's Arrow format group) - end defaults to shown to match
+  // every arrow drawn before this existed, start defaults to hidden since a
+  // start arrowhead used to not be possible at all.
+  const showEndArrow = arrow.endArrow ?? true
+  const showStartArrow = Boolean(arrow.startArrow)
+  const endMarker = endMarkerId
+    ? `${endMarkerId}${isSelected ? '-selected' : ''}`
+    : showEndArrow
+      ? (isSelected ? 'arrowhead-selected' : 'arrowhead')
+      : null
+  const startMarker = startMarkerId
+    ? `${startMarkerId}${isSelected ? '-selected' : ''}`
+    : showStartArrow
+      ? (isSelected ? 'arrowhead-selected' : 'arrowhead')
+      : null
+
+  // Group opacity (not just on the visible stroke) so the arrowhead marker
+  // fades along with it too - a marker painted via marker-start/marker-end
+  // composites as part of whichever element references it, so this one
+  // `opacity` covers both. The invisible hit-stroke sits in this same group,
+  // but opacity never affects pointer-events/hit-testing, so the arrow
+  // stays exactly as easy to click/select at low opacity as at full.
+  const opacity = arrow.opacity != null ? arrow.opacity / 100 : undefined
 
   return (
-    <g>
+    <g opacity={opacity}>
       <path
         d={d}
         fill="none"
@@ -141,7 +160,7 @@ const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, di
         strokeWidth={isSelected ? 2 : 1.5}
         strokeDasharray={dasharrayForLineStyle(arrow.lineStyle)}
         markerStart={startMarker ? `url(#${startMarker})` : undefined}
-        markerEnd={`url(#${endMarker})`}
+        markerEnd={endMarker ? `url(#${endMarker})` : undefined}
         style={{ pointerEvents: 'none' }}
       />
     </g>
@@ -322,7 +341,15 @@ function ArrowLayer() {
       viewBox={`${svgBounds.minX} ${svgBounds.minY} ${svgBounds.width} ${svgBounds.height}`}
     >
       <defs>
-        <marker id="arrowhead" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+        {/* orient="auto-start-reverse" (not plain "auto"): identical to
+            "auto" when used as marker-end (every existing single-headed
+            arrow's only use until now), but also correctly usable as
+            marker-start for a double-headed arrow (SET_ARROW_HEADS) - "auto"
+            alone would point a start marker forward *with* the path instead
+            of outward through the shape it's attached to. Same reasoning
+            already documented on the ERD markers below, just applied to the
+            plain triangle now that it's no longer only ever an end marker. */}
+        <marker id="arrowhead" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto-start-reverse">
           <polygon points="0 0, 8 3.5, 0 7" fill="var(--color-soft)" />
         </marker>
         <marker
@@ -331,7 +358,7 @@ function ArrowLayer() {
           markerHeight="9"
           refX="7"
           refY="3.5"
-          orient="auto"
+          orient="auto-start-reverse"
         >
           <polygon points="0 0, 8 3.5, 0 7" fill="var(--color-brand-purple)" />
         </marker>

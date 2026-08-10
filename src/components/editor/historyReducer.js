@@ -16,6 +16,10 @@ const CONTINUOUS_TYPES = new Set([
   // without coalescing, dragging the slider once from 0 to 48 would create
   // 48 separate undo steps instead of one.
   'SET_SHAPE_CORNER_RADIUS',
+  // The opacity slider (EditorTopbar) is the same continuous drag-tick
+  // gesture as corner radius above, just for a different field/target kind.
+  'SET_SHAPE_OPACITY',
+  'SET_ARROW_OPACITY',
 ])
 
 const MAX_HISTORY = 100

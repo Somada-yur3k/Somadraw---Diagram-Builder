@@ -36,7 +36,17 @@ function computeCanvasSize(shapes, shapeOrder) {
 }
 
 const MARQUEE_THRESHOLD = 3
-const ZOOM_STEP = 0.1
+// Native dblclick isn't reliable for the empty-canvas pan gesture below -
+// the marquee/shape-placement pointerdown handling calls setPointerCapture
+// on the very first click, which can redirect the second click's event
+// target away from this element (same reasoning EditableText.jsx's own
+// double-click detection already documents). Detected manually from
+// pointerdown timing instead.
+const DOUBLE_CLICK_MS = 400
+// Exported so EditorTopbar's zoom in/out buttons move by the exact same
+// amount as this file's own Ctrl+Wheel zoom below - one shared step, not
+// two magic numbers that happen to match today.
+export const ZOOM_STEP = 0.1
 const NUDGE_STEP = 1
 const NUDGE_STEP_LARGE = 10
 const NUDGE_DELTAS = {
@@ -150,6 +160,13 @@ function EditorCanvas({ canvasNodeRef }) {
   const zoomAnchorRef = useRef(null)
   const prevZoomRef = useRef(zoom)
   const [marqueeRect, setMarqueeRect] = useState(null)
+  // Double-click-and-hold empty canvas to pan by dragging, instead of
+  // hunting for the scrollbar - panRef tracks the in-progress gesture
+  // (wrapper's own scroll position at grab time, so drag delta maps
+  // straight onto it), isPanning only drives the cursor.
+  const panRef = useRef(null)
+  const lastCanvasClickAtRef = useRef(0)
+  const [isPanning, setIsPanning] = useState(false)
   // Right-click menu (EditorContextMenu) - shape-only by design, see its own
   // comment. Just a screen position + open/closed; the menu itself reads
   // everything else it needs straight from `state`/`dispatch`.
@@ -226,6 +243,16 @@ function EditorCanvas({ canvasNodeRef }) {
         event.preventDefault()
         dispatch({ type: 'SELECT', kind: 'shape', ids: state.shapeOrder })
       }
+      // Ctrl+D - standard "duplicate in place" shortcut this app didn't have
+      // yet (Figma/Slides/etc. convention); browsers bind this natively to
+      // "bookmark page", same as Ctrl+S would collide with "save page" -
+      // preventDefault suppresses that the same way every shortcut above
+      // already does for its own native collision.
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'd') {
+        if (state.selection?.kind !== 'shape') return
+        event.preventDefault()
+        dispatch({ type: 'DUPLICATE_SELECTED' })
+      }
       // Ctrl+G / Ctrl+Shift+G - same actions as the right-click menu's Group
       // / Ungroup items (see EditorContextMenu.jsx), offered as shortcuts
       // too since Copy/Paste/Undo already work both ways.
@@ -297,6 +324,28 @@ function EditorCanvas({ canvasNodeRef }) {
   const handleCanvasPointerDown = (event) => {
     if (event.target !== event.currentTarget) return
 
+    // Double-click-and-hold empty canvas to pan by dragging - checked before
+    // any tool-specific handling below (marquee-select, shape placement, the
+    // pending-arrow cancel) so it always wins on the second click regardless
+    // of which tool is active, the same way this gesture would in any other
+    // canvas-based editor.
+    const now = Date.now()
+    const isDoubleClick = now - lastCanvasClickAtRef.current < DOUBLE_CLICK_MS
+    lastCanvasClickAtRef.current = now
+    if (isDoubleClick) {
+      event.preventDefault()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      panRef.current = {
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startScrollLeft: wrapperRef.current.scrollLeft,
+        startScrollTop: wrapperRef.current.scrollTop,
+      }
+      setIsPanning(true)
+      return
+    }
+
     if (state.tool === 'arrow') {
       if (state.pendingArrowSourceId) dispatch({ type: 'CANCEL_PENDING_ARROW' })
       return
@@ -353,6 +402,17 @@ function EditorCanvas({ canvasNodeRef }) {
   }
 
   const handleCanvasPointerMove = (event) => {
+    const pan = panRef.current
+    if (pan && pan.pointerId === event.pointerId) {
+      const wrapper = wrapperRef.current
+      // Content follows the cursor 1:1 in screen px (not divided by zoom -
+      // scrollLeft/Top are already in the same screen-px space this drag
+      // delta is measured in), same "grab and slide" feel as a hand tool.
+      wrapper.scrollLeft = pan.startScrollLeft - (event.clientX - pan.startClientX)
+      wrapper.scrollTop = pan.startScrollTop - (event.clientY - pan.startClientY)
+      return
+    }
+
     // Geometric hover detection (point-in-rect against every shape, not DOM
     // hit-testing) - see containsPoint's comment for why. Runs on every
     // move over the canvas, including moves bubbled up from a captured
@@ -397,7 +457,23 @@ function EditorCanvas({ canvasNodeRef }) {
     })
   }
 
-  const endMarquee = (event) => {
+  // Handles the pointerup/cancel end of either empty-canvas gesture this
+  // element can be mid - the double-click pan started above, or the plain
+  // marquee-select drag - they never overlap (pan's own pointerdown branch
+  // always returns early, before marqueeDragRef could get set for that same
+  // pointer), so checking pan first and returning is enough to keep them
+  // from tripping over each other.
+  const endCanvasGesture = (event) => {
+    const pan = panRef.current
+    if (pan && pan.pointerId === event.pointerId) {
+      panRef.current = null
+      setIsPanning(false)
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+      return
+    }
+
     const drag = marqueeDragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     marqueeDragRef.current = null
@@ -451,8 +527,8 @@ function EditorCanvas({ canvasNodeRef }) {
           }}
           onPointerDown={handleCanvasPointerDown}
           onPointerMove={handleCanvasPointerMove}
-          onPointerUp={endMarquee}
-          onPointerCancel={endMarquee}
+          onPointerUp={endCanvasGesture}
+          onPointerCancel={endCanvasGesture}
           onPointerLeave={clearCursor}
           onContextMenu={handleContextMenu}
           className="relative"
@@ -461,7 +537,7 @@ function EditorCanvas({ canvasNodeRef }) {
             height: canvasSize.height,
             transform: `scale(${zoom})`,
             transformOrigin: '0 0',
-            cursor: state.tool === 'select' ? 'default' : 'crosshair',
+            cursor: isPanning ? 'grabbing' : state.tool === 'select' ? 'default' : 'crosshair',
           }}
         >
           <ArrowLayer />

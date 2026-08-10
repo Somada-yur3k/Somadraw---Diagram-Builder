@@ -79,8 +79,15 @@ function contentBounds(shapes, shapeOrder, arrows, arrowOrder) {
       arrow.routeMidOffset ?? 0,
       arrow.connectorType ?? 'shape',
     )
-    const labelX = labelAnchor.x + (arrow.labelOffsetX ?? 0)
-    const labelY = labelAnchor.y + (arrow.labelOffsetY ?? 0)
+    // A locked label (labelLockX/Y - see TOGGLE_ARROW_LABEL_LOCK in
+    // useDiagramEditor.js) ignores computeArrowRoute's live labelAnchor
+    // entirely, same as ArrowLabels.jsx's own render does - otherwise a
+    // label locked somewhere the *current* route no longer passes near
+    // could land outside this computed box and get cropped out of export.
+    const labelAnchorX = arrow.labelLockX ?? labelAnchor.x
+    const labelAnchorY = arrow.labelLockY ?? labelAnchor.y
+    const labelX = labelAnchorX + (arrow.labelOffsetX ?? 0)
+    const labelY = labelAnchorY + (arrow.labelOffsetY ?? 0)
     const xs = [start.x, end.x, labelX]
     const ys = [start.y, end.y, labelY]
     if (midSegment) {

@@ -2,7 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState }
 import { createHistoryReducer, initHistory } from './historyReducer'
 import { facingSide, isMidSegmentEligible, pickSpacedT } from './arrowRouting'
 import { clampFontSize, patchDiffers } from './textFormat'
-import { DEFAULT_CORNER_RADIUS_BY_TYPE, clampCornerRadius, DEFAULT_FILL_COLOR_BY_TYPE } from './shapeStyle'
+import {
+  DEFAULT_CORNER_RADIUS_BY_TYPE,
+  clampCornerRadius,
+  DEFAULT_FILL_COLOR_BY_TYPE,
+  clampOpacity,
+} from './shapeStyle'
 import { containerShapeTypes } from './shapeCatalog'
 import { supabase } from '../../lib/supabaseClient'
 import { useDiagramChannel } from '../../lib/useDiagramChannel'
@@ -623,10 +628,13 @@ function reducer(state, action) {
       }
     }
 
-    // labelOffsetX/Y are relative to the arrow's live-recomputed labelAnchor
-    // (not an absolute position), so a manually-dragged label stays roughly
-    // near the arrow instead of visually detaching from it if the arrow's
-    // route later changes (shapes moved, endpoint reconnected, etc.).
+    // labelOffsetX/Y are relative to whichever anchor is currently in effect
+    // - the arrow's live-recomputed labelAnchor by default, or a frozen
+    // labelLockX/Y snapshot once TOGGLE_ARROW_LABEL_LOCK below has locked it
+    // - so a manually-dragged label stays put *relative to that anchor*
+    // whether the arrow's route later changes (shapes moved, endpoint
+    // reconnected, etc.) or not. Same reducer logic either way; only which
+    // anchor ArrowLabels.jsx reads at render time differs.
     case 'MOVE_ARROW_LABEL': {
       const arrow = state.arrows[action.id]
       if (!arrow) return state
@@ -638,6 +646,43 @@ function reducer(state, action) {
         arrows: {
           ...state.arrows,
           [action.id]: { ...arrow, labelOffsetX: action.offsetX, labelOffsetY: action.offsetY },
+        },
+      }
+    }
+
+    // Freezes (or releases) the anchor labelOffsetX/Y is measured from - see
+    // that field's own comment above. action.anchorX/Y is the *live* anchor
+    // ArrowLabels.jsx already computed for this render, passed in rather
+    // than recomputed here (computeArrowRoute needs the connected shapes,
+    // and the reducer has no reason to duplicate that), so both directions
+    // of this toggle land exactly on the label's current on-screen position -
+    // never a jump at the instant it's (un)locked, only afterward does
+    // locked mean "stays here regardless of what the arrow does."
+    case 'TOGGLE_ARROW_LABEL_LOCK': {
+      const arrow = state.arrows[action.id]
+      if (!arrow) return state
+      if (arrow.labelLockX != null) {
+        const absX = arrow.labelLockX + (arrow.labelOffsetX ?? 0)
+        const absY = arrow.labelLockY + (arrow.labelOffsetY ?? 0)
+        return {
+          ...state,
+          arrows: {
+            ...state.arrows,
+            [action.id]: {
+              ...arrow,
+              labelLockX: null,
+              labelLockY: null,
+              labelOffsetX: absX - action.anchorX,
+              labelOffsetY: absY - action.anchorY,
+            },
+          },
+        }
+      }
+      return {
+        ...state,
+        arrows: {
+          ...state.arrows,
+          [action.id]: { ...arrow, labelLockX: action.anchorX, labelLockY: action.anchorY },
         },
       }
     }
@@ -777,6 +822,77 @@ function reducer(state, action) {
         ...state,
         arrows: { ...state.arrows, [action.id]: { ...arrow, lineStyle: action.lineStyle } },
       }
+    }
+
+    // Changes an *existing* arrow's geometry - distinct from
+    // SET_ARROW_CONNECTOR_TYPE (top of this file), which only sets what
+    // geometry the *next newly-drawn* arrow starts with. Until now the only
+    // way to change this after drawing was to delete the arrow and redraw
+    // it from scratch. routeMidOffset always resets: 'straight'/'curved'
+    // ignore it entirely (see arrowRouting.js), so a value left over from
+    // 'shape'/'erd' would otherwise go dormant and silently reappear if the
+    // user ever switches back - same "no stale surprise" reasoning
+    // RECONNECT_ARROW_ENDPOINT's own family-change clearing already uses,
+    // just unconditional here since a deliberate type switch (not an
+    // incidental endpoint drag) is already the explicit action being taken.
+    // startCardinality/endCardinality need no equivalent handling - every
+    // arrow already carries both from creation regardless of connectorType
+    // (see ARROW_TOOL_CLICK_SHAPE), so switching to 'erd' has valid values
+    // to show immediately.
+    case 'SET_ARROW_CONNECTOR': {
+      const arrow = state.arrows[action.id]
+      if (!arrow) return state
+      if ((arrow.connectorType ?? 'shape') === action.connectorType) return state
+      return {
+        ...state,
+        arrows: {
+          ...state.arrows,
+          [action.id]: { ...arrow, connectorType: action.connectorType, routeMidOffset: null },
+        },
+      }
+    }
+
+    // Which end(s) of a non-ERD arrow show a triangle head at all - ERD
+    // arrows keep using their own startCardinality/endCardinality glyph
+    // system instead (see SET_ARROW_CARDINALITY above), so this only ever
+    // applies when connectorType !== 'erd' (EditorTopbar gates its own UI
+    // for this the same way). Both fields set together, from one of three
+    // presets in the topbar (end-only/both/neither) rather than two
+    // independent toggles - a start-only arrow is a real but rare enough
+    // case that offering it wasn't worth the extra button.
+    case 'SET_ARROW_HEADS': {
+      const arrow = state.arrows[action.id]
+      if (!arrow) return state
+      if ((arrow.startArrow ?? false) === action.startArrow && (arrow.endArrow ?? true) === action.endArrow) {
+        return state
+      }
+      return {
+        ...state,
+        arrows: {
+          ...state.arrows,
+          [action.id]: { ...arrow, startArrow: action.startArrow, endArrow: action.endArrow },
+        },
+      }
+    }
+
+    // opacity is 0..100 (matching the topbar's slider display), converted to
+    // a 0..1 CSS value only at render time (Shape.jsx/ArrowLayer.jsx) - same
+    // "store the user-facing unit, convert at the edge" approach fontSize
+    // already uses (clampFontSize stores px, textFormatStyle appends 'px').
+    case 'SET_SHAPE_OPACITY': {
+      const shape = state.shapes[action.id]
+      if (!shape) return state
+      const opacity = clampOpacity(action.opacity)
+      if ((shape.opacity ?? 100) === opacity) return state
+      return { ...state, shapes: { ...state.shapes, [action.id]: { ...shape, opacity } } }
+    }
+
+    case 'SET_ARROW_OPACITY': {
+      const arrow = state.arrows[action.id]
+      if (!arrow) return state
+      const opacity = clampOpacity(action.opacity)
+      if ((arrow.opacity ?? 100) === opacity) return state
+      return { ...state, arrows: { ...state.arrows, [action.id]: { ...arrow, opacity } } }
     }
 
     case 'SET_HOVERED_SHAPE': {
@@ -935,6 +1051,58 @@ function reducer(state, action) {
       return { ...state, clipboard: { shapes, arrows } }
     }
 
+    // One-step "copy, then paste right here" - kept fully independent of
+    // COPY_SELECTED/PASTE rather than composed from them, since PASTE's own
+    // repeated-paste fan-out behavior depends on round-tripping through the
+    // cross-tab clipboard (see its own comment below), which two dispatches
+    // fired back-to-back in the same gesture can't reliably do (the effect
+    // that publishes state.clipboard to localStorage hasn't run yet by the
+    // time a second dispatch would read it back). Same id/groupId remapping
+    // logic as PASTE, just sourced from this diagram's own current
+    // selection instead of action.clip.
+    case 'DUPLICATE_SELECTED': {
+      if (state.selection?.kind !== 'shape' || state.selection.ids.length === 0) return state
+      const ids = new Set(state.selection.ids)
+      const containedArrows = state.arrowOrder
+        .map((id) => state.arrows[id])
+        .filter((arrow) => ids.has(arrow.fromId) && ids.has(arrow.toId))
+
+      const idMap = new Map()
+      const groupIdMap = new Map()
+      const shapes = { ...state.shapes }
+      const shapeIds = []
+      for (const shapeId of state.selection.ids) {
+        const shape = state.shapes[shapeId]
+        const id = createId()
+        idMap.set(shapeId, id)
+        const { x, y } = clampShapePosition(shape.x + PASTE_OFFSET, shape.y + PASTE_OFFSET)
+        let groupId = shape.groupId ?? null
+        if (groupId) {
+          if (!groupIdMap.has(groupId)) groupIdMap.set(groupId, createId())
+          groupId = groupIdMap.get(groupId)
+        }
+        shapes[id] = { ...shape, id, x, y, groupId }
+        shapeIds.push(id)
+      }
+
+      const arrows = { ...state.arrows }
+      const arrowIds = []
+      for (const arrow of containedArrows) {
+        const id = createId()
+        arrows[id] = { ...arrow, id, fromId: idMap.get(arrow.fromId), toId: idMap.get(arrow.toId) }
+        arrowIds.push(id)
+      }
+
+      return {
+        ...state,
+        shapes,
+        shapeOrder: [...state.shapeOrder, ...shapeIds],
+        arrows,
+        arrowOrder: [...state.arrowOrder, ...arrowIds],
+        selection: { kind: 'shape', ids: shapeIds },
+      }
+    }
+
     case 'PASTE': {
       // Read fresh from localStorage at dispatch time (see action.clip in
       // EditorCanvas's Ctrl+V handler), not this diagram's own
@@ -1070,6 +1238,41 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
   const isDragging = history.isDragging
   const [saveStatus, setSaveStatus] = useState('saved')
 
+  // Flips to 'saving' the instant a persisted field actually changes
+  // reference - adjusting state during render (React's own documented
+  // pattern for exactly this: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes),
+  // not inside an effect, which this project's stricter lint rule flags as
+  // risking a cascading extra render for no benefit over doing it here
+  // directly. Two things depend on this firing immediately rather than only
+  // once runSave's own network call starts SAVE_DEBOUNCE_MS later (see the
+  // debounced-save effect further down, which still owns actually
+  // scheduling and running that save): the topbar's "Saving…" indicator now
+  // reflects unsaved work the instant it exists instead of seeming to lag
+  // behind every edit, and the tab-refocus refetch further down treats
+  // anything other than 'saved' as "the DB row is stale, don't apply it
+  // over this" for that same window - without it, switching tabs (or even
+  // briefly losing/regaining window focus) within that window could
+  // silently revert whatever was just changed back to its pre-edit state.
+  const [lastPersisted, setLastPersisted] = useState(() => extractPersisted(state))
+  const persistedNow = extractPersisted(state)
+  const persistedChanged =
+    persistedNow.shapes !== lastPersisted.shapes ||
+    persistedNow.shapeOrder !== lastPersisted.shapeOrder ||
+    persistedNow.arrows !== lastPersisted.arrows ||
+    persistedNow.arrowOrder !== lastPersisted.arrowOrder ||
+    persistedNow.counters !== lastPersisted.counters ||
+    persistedNow.showGrid !== lastPersisted.showGrid
+  if (persistedChanged) {
+    setLastPersisted(persistedNow)
+    // A viewer's own dispatch can never actually change these fields (see
+    // READ_ONLY_ALLOWED_ACTIONS below), but APPLY_REMOTE_STATE bypasses
+    // that guard (it goes through rawDispatch directly) - so this can still
+    // fire for a viewer on an incoming collaborator edit. They never save
+    // anything themselves (the debounced-save effect's own `if (readOnly)
+    // return` already skips them entirely), so this stays silent for them.
+    if (!readOnly) setSaveStatus('saving')
+  }
+
   // The actual permission boundary - see READ_ONLY_ALLOWED_ACTIONS above.
   // Wrapping here (rather than exporting rawDispatch) means every caller
   // downstream keeps calling a value named `dispatch` exactly as before;
@@ -1138,6 +1341,19 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
     if (!diagramId) return
     const refetch = () => {
       if (document.visibilityState !== 'visible') return
+      // Skip while a local edit is still unsaved - saveStatus flips to
+      // 'saving' the moment the debounce timer below is *scheduled* (not
+      // just once the network call actually starts - see that effect's own
+      // comment), so this covers the debounce window, the save itself, and
+      // an error still waiting to be retried by the next edit. The DB row
+      // this would read is guaranteed stale in any of those, and applying
+      // it (via applyRemoteState below) would silently revert whatever was
+      // just changed back to its pre-edit state - which is exactly what
+      // made a shape moved right before switching tabs (or even briefly
+      // losing/regaining window focus) snap back the moment focus
+      // returned. The debounced save still lands on its own regardless -
+      // this only skips *this* particular read racing ahead of it.
+      if (saveStatus !== 'saved') return
       supabase
         .from('diagrams')
         .select('data')
@@ -1153,7 +1369,7 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
       document.removeEventListener('visibilitychange', refetch)
       window.removeEventListener('focus', refetch)
     }
-  }, [diagramId, applyRemoteState])
+  }, [diagramId, applyRemoteState, saveStatus])
 
   // A drag dispatches MOVE_SHAPE on every single pointermove - without this,
   // that meant one full-document broadcast per pointermove tick (30-60/sec

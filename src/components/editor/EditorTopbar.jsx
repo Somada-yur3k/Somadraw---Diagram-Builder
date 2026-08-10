@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { usePopoverState } from '../../lib/usePopoverState'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { MIN_ZOOM, MAX_ZOOM } from './useDiagramEditor'
+import { ZOOM_STEP } from './EditorCanvas'
 import {
   FONT_OPTIONS,
   DEFAULT_FONT_ID,
@@ -16,6 +17,8 @@ import {
   MIN_CORNER_RADIUS,
   MAX_CORNER_RADIUS,
   DEFAULT_FILL_COLOR_BY_TYPE,
+  MIN_OPACITY,
+  MAX_OPACITY,
 } from './shapeStyle'
 import { exportDiagramToPdf, exportDiagramToPng } from './diagramExport'
 import LoadingScreen from '../LoadingScreen'
@@ -37,6 +40,16 @@ const FONT_SIZE_PRESETS = [8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 36,
 const ZOOM_PRESETS = [25, 50, 75, 100, 125, 150, 175, 200].filter(
   (percent) => percent / 100 >= MIN_ZOOM && percent / 100 <= MAX_ZOOM,
 )
+
+// Same set/order/labels as EditorSidebar.jsx's own connectorTypes (the Draw
+// Arrow dropdown) - this is that same choice, just editable after the fact
+// on an arrow that already exists instead of only at draw time.
+const ARROW_CONNECTOR_TYPES = [
+  { key: 'straight', label: 'Straight Line' },
+  { key: 'curved', label: 'Curved Line' },
+  { key: 'shape', label: 'Shape Connector' },
+  { key: 'erd', label: 'ERD Relationship' },
+]
 
 const EXPORT_PANEL_WIDTH = 208 // matches w-52 below
 // Right-aligned under the trigger (not the shared default centered-below
@@ -140,6 +153,18 @@ function CornerRadiusIcon() {
   )
 }
 
+// Half-filled circle - the same "opacity/contrast" glyph most editors use,
+// simple enough to draw with plain strokes/fill rather than needing an
+// actual checkerboard pattern to read as "transparency."
+function OpacityIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 4a8 8 0 0 0 0 16Z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 function LineStyleIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -147,6 +172,64 @@ function LineStyleIcon() {
       <line x1="4" y1="16" x2="9" y2="16" strokeDasharray="3 3" />
       <line x1="12" y1="16" x2="16" y2="16" strokeDasharray="3 3" />
       <line x1="19" y1="16" x2="20" y2="16" strokeDasharray="3 3" />
+    </svg>
+  )
+}
+
+// Same three glyphs EditorSidebar.jsx's own ConnectorTypeIcon draws for its
+// Draw Arrow dropdown (kept as a separate local copy, this file's own
+// convention - see Group/Ungroup's comment below) - 'shape' and 'erd' share
+// the bend glyph there too, since the only real difference between them is
+// which marker ArrowLayer.jsx draws at each end, not the path geometry.
+function ConnectorTypeIcon({ type }) {
+  if (type === 'straight') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="shrink-0">
+        <line x1="4" y1="16" x2="16" y2="4" />
+      </svg>
+    )
+  }
+  if (type === 'curved') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="shrink-0">
+        <path d="M4 16C4 8 16 12 16 4" />
+      </svg>
+    )
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M4 16H10V4H16" />
+    </svg>
+  )
+}
+
+// The three arrowhead presets SET_ARROW_HEADS offers - end-only (this app's
+// original, only-ever behavior before this existed), both, or neither.
+// Independent start/end checkboxes would cover one more real case
+// (start-only), rare enough not to be worth a fourth control.
+function ArrowHeadEndIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <line x1="3" y1="10" x2="16" y2="10" />
+      <path d="M11 5.5 16 10l-5 4.5" />
+    </svg>
+  )
+}
+
+function ArrowHeadBothIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <line x1="4" y1="10" x2="16" y2="10" />
+      <path d="M9 5.5 4 10l5 4.5" />
+      <path d="M11 5.5 16 10l-5 4.5" />
+    </svg>
+  )
+}
+
+function ArrowHeadNoneIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="shrink-0">
+      <line x1="4" y1="10" x2="16" y2="10" />
     </svg>
   )
 }
@@ -170,6 +253,36 @@ function UngroupIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="2" width="9" height="9" rx="1.5" />
       <rect x="13" y="13" width="9" height="9" rx="1.5" />
+    </svg>
+  )
+}
+
+// Same glyphs EditorContextMenu.jsx's own Bring to front/Send to back
+// entries use, same "identical action, identical icon" reasoning as
+// Group/Ungroup above.
+function BringToFrontIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="12" height="12" rx="1.5" opacity="0.4" />
+      <rect x="9" y="9" width="12" height="12" rx="1.5" fill="white" />
+    </svg>
+  )
+}
+
+function SendToBackIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="12" height="12" rx="1.5" fill="white" />
+      <rect x="9" y="9" width="12" height="12" rx="1.5" opacity="0.4" />
+    </svg>
+  )
+}
+
+function DuplicateIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="12" height="12" rx="1.5" />
+      <path d="M6 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V6" />
     </svg>
   )
 }
@@ -315,6 +428,24 @@ function RibbonButton({
       {icon}
       <span>{label}</span>
     </button>
+  )
+}
+
+// Format tab layout: instead of one undifferentiated row of controls with a
+// bare divider between every unrelated cluster, each related cluster of
+// controls gets a small caption underneath it (Font/Text/Style/Opacity/
+// Arrange) - the same ribbon-toolbar language RibbonButton's icon-over-label
+// buttons already use on the Home tab, just applied to a *group* of controls
+// instead of one button. Reads as organized sections at a glance instead of
+// a wall of icons, and (as a side effect) brings the Format tab's own row
+// height in line with Home's, which used to visibly jump shorter/taller
+// when switching tabs since Format's controls used to have no second line.
+function FormatGroup({ label, children }) {
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-1 px-1">
+      <div className="flex shrink-0 items-center gap-1.5">{children}</div>
+      <span className="text-[10px] font-medium uppercase tracking-wide text-soft/70">{label}</span>
+    </div>
   )
 }
 
@@ -523,6 +654,48 @@ function EditorTopbar({ canvasNodeRef }) {
   const lineStylePanelRef = useRef(null)
   const lineStylePopover = usePopoverState(lineStyleTriggerRef, lineStylePanelRef)
 
+  // Arrow-only (a shape has no equivalent concept of "connector type" or
+  // "which end has a head") - geometry and heads are two separate controls
+  // since they're two separate fields (connectorType vs startArrow/endArrow),
+  // but both only ever apply to selectedArrow.
+  const currentConnectorType = selectedArrow?.connectorType ?? 'shape'
+  const setConnectorType = (connectorType) => {
+    if (!selectedArrow) return
+    dispatch({ type: 'SET_ARROW_CONNECTOR', id: selectedArrow.id, connectorType })
+    connectorTypePopover.close()
+  }
+  const connectorTypeTriggerRef = useRef(null)
+  const connectorTypePanelRef = useRef(null)
+  const connectorTypePopover = usePopoverState(connectorTypeTriggerRef, connectorTypePanelRef)
+
+  // Heads only make sense for the plain triangle marker - an ERD arrow's
+  // ends are already independently configurable via its own cardinality
+  // pickers (ArrowCardinalityPickers.jsx), a different, richer glyph system
+  // this app already has, not a fit for a generic "arrowhead on/off" toggle.
+  const showArrowHeadControl = Boolean(selectedArrow) && currentConnectorType !== 'erd'
+  const currentStartArrow = Boolean(selectedArrow?.startArrow)
+  const currentEndArrow = selectedArrow?.endArrow ?? true
+  const setArrowHeads = (startArrow, endArrow) => {
+    if (!selectedArrow) return
+    dispatch({ type: 'SET_ARROW_HEADS', id: selectedArrow.id, startArrow, endArrow })
+  }
+
+  // One Opacity control, shared by shapes and arrows the same way Fill/Line
+  // style are above - SET_SHAPE_OPACITY vs SET_ARROW_OPACITY are different
+  // actions, but currentOpacity/updateOpacity already resolve to the right
+  // one from formatTarget the same way currentFillColor does.
+  const currentOpacity = formatTarget?.opacity ?? 100
+  const updateOpacity = (opacity) => {
+    if (selectedShape) {
+      dispatch({ type: 'SET_SHAPE_OPACITY', id: selectedShape.id, opacity })
+    } else if (selectedArrow) {
+      dispatch({ type: 'SET_ARROW_OPACITY', id: selectedArrow.id, opacity })
+    }
+  }
+  const opacityTriggerRef = useRef(null)
+  const opacityPanelRef = useRef(null)
+  const opacityPopover = usePopoverState(opacityTriggerRef, opacityPanelRef)
+
   // Two tabs, both genuinely functional (not placeholders): Home holds the
   // general canvas actions, Format holds the per-shape/arrow typography
   // controls. Format is always clickable (not disabled without a selection)
@@ -576,12 +749,19 @@ function EditorTopbar({ canvasNodeRef }) {
   if (formatKey !== lastFormatKey) {
     setLastFormatKey(formatKey)
     fontSizePopover.close()
-    // Line style is shared by shapes and arrows (see currentLineStyle/
-    // setLineStyle above), so it closes on *any* format-target change -
-    // switching between two arrows, or an arrow and a shape - not just a
-    // shape-to-shape one the way corner radius's own close (above) only
-    // needs to.
+    // Line style/Opacity are shared by shapes and arrows (see
+    // currentLineStyle/currentOpacity above), so they close on *any*
+    // format-target change - switching between two arrows, or an arrow and
+    // a shape - not just a shape-to-shape one the way corner radius's own
+    // close (above) only needs to.
     lineStylePopover.close()
+    opacityPopover.close()
+    // Connector type is arrow-only, but closing it unconditionally here
+    // (rather than tracking a separate selectedArrow-keyed id) is simpler
+    // and harmless - it's already closed on every shape selection, since
+    // formatKey changing to a shape's id is itself a "different target" the
+    // same as switching arrows would be.
+    connectorTypePopover.close()
     alignPopover.close()
     // Selecting something jumps straight to the Format tab; losing the
     // selection (Escape, Delete, clicking empty canvas) falls back to Home
@@ -736,21 +916,51 @@ function EditorTopbar({ canvasNodeRef }) {
               title={state.showGrid ? 'Hide grid' : 'Show grid'}
             />
 
-            <button
-              ref={zoomTriggerRef}
-              type="button"
-              onClick={zoomPopover.toggle}
-              aria-haspopup="true"
-              aria-expanded={zoomPopover.open}
-              title="Zoom level"
-              aria-label="Zoom level"
-              className={`flex h-8 shrink-0 items-center gap-1 self-center rounded-md border border-line px-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-soft ${
-                zoomPopover.open ? 'bg-surface-soft' : ''
-              }`}
-            >
-              {Math.round(zoom * 100)}%
-              <ChevronDownIcon />
-            </button>
+            {/* Zoom out/in flank the existing percent-and-presets trigger -
+                that dropdown alone had no fine-grained step control, only
+                jumps between fixed presets. Same ZOOM_STEP the canvas's own
+                Ctrl+Wheel zoom already uses (EditorCanvas.jsx), so a button
+                click and a scroll tick move the same amount. Merged into one
+                bordered cluster rather than three freestanding controls -
+                matches this toolbar's own convention for a tightly related
+                set (Font family+size, B/I/U, align L/C/R, all do the same). */}
+            <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+              <button
+                type="button"
+                onClick={() => setZoom(zoom - ZOOM_STEP)}
+                disabled={zoom <= MIN_ZOOM}
+                title="Zoom out"
+                aria-label="Zoom out"
+                className="flex h-8 w-7 items-center justify-center text-[15px] font-medium text-body transition-colors hover:bg-surface-soft disabled:pointer-events-none disabled:opacity-40"
+              >
+                −
+              </button>
+              <button
+                ref={zoomTriggerRef}
+                type="button"
+                onClick={zoomPopover.toggle}
+                aria-haspopup="true"
+                aria-expanded={zoomPopover.open}
+                title="Zoom level"
+                aria-label="Zoom level"
+                className={`flex h-8 shrink-0 items-center gap-1 self-center border-x border-line px-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-soft ${
+                  zoomPopover.open ? 'bg-surface-soft' : ''
+                }`}
+              >
+                {Math.round(zoom * 100)}%
+                <ChevronDownIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoom(zoom + ZOOM_STEP)}
+                disabled={zoom >= MAX_ZOOM}
+                title="Zoom in"
+                aria-label="Zoom in"
+                className="flex h-8 w-7 items-center justify-center text-[15px] font-medium text-body transition-colors hover:bg-surface-soft disabled:pointer-events-none disabled:opacity-40"
+              >
+                +
+              </button>
+            </div>
           </>
         )}
 
@@ -860,38 +1070,40 @@ function EditorTopbar({ canvasNodeRef }) {
         )}
 
         {activeTab === 'format' && formatTarget && !readOnly && (
-          <div className="flex shrink-0 items-center gap-1.5 self-center">
-            <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
-              <select
-                value={formatTarget.fontFamily ?? DEFAULT_FONT_ID}
-                onChange={(event) => updateFormat({ fontFamily: event.target.value })}
-                title="Font family"
-                aria-label="Font family"
-                className="h-8 shrink-0 bg-white px-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-soft"
-              >
-                {FONT_OPTIONS.map((font) => (
-                  <option key={font.id} value={font.id}>
-                    {font.label}
-                  </option>
-                ))}
-              </select>
+          <>
+            <FormatGroup label="Font">
+              <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+                <select
+                  value={formatTarget.fontFamily ?? DEFAULT_FONT_ID}
+                  onChange={(event) => updateFormat({ fontFamily: event.target.value })}
+                  title="Font family"
+                  aria-label="Font family"
+                  className="h-8 shrink-0 bg-white px-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-soft"
+                >
+                  {FONT_OPTIONS.map((font) => (
+                    <option key={font.id} value={font.id}>
+                      {font.label}
+                    </option>
+                  ))}
+                </select>
 
-              <button
-                ref={fontSizeTriggerRef}
-                type="button"
-                onClick={fontSizePopover.toggle}
-                aria-haspopup="true"
-                aria-expanded={fontSizePopover.open}
-                title="Font size"
-                aria-label="Font size"
-                className={`flex h-8 shrink-0 items-center gap-1 border-l border-line px-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-soft ${
-                  fontSizePopover.open ? 'bg-surface-soft' : ''
-                }`}
-              >
-                {currentFontSize}
-                <ChevronDownIcon />
-              </button>
-            </div>
+                <button
+                  ref={fontSizeTriggerRef}
+                  type="button"
+                  onClick={fontSizePopover.toggle}
+                  aria-haspopup="true"
+                  aria-expanded={fontSizePopover.open}
+                  title="Font size"
+                  aria-label="Font size"
+                  className={`flex h-8 shrink-0 items-center gap-1 border-l border-line px-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-soft ${
+                    fontSizePopover.open ? 'bg-surface-soft' : ''
+                  }`}
+                >
+                  {currentFontSize}
+                  <ChevronDownIcon />
+                </button>
+              </div>
+            </FormatGroup>
 
             {fontSizePopover.open &&
               fontSizePopover.pos &&
@@ -920,32 +1132,133 @@ function EditorTopbar({ canvasNodeRef }) {
                 document.body,
               )}
 
-            {/* Fill - one control shared by shapes (any type, including
-                label - see Shape.jsx) and arrows, since formatTarget is
-                always exactly one or the other and currentFillColor/the
-                commit effect above already resolve to the right field
-                either way. FillIcon is purely decorative (the swatch itself
-                is still the real, only control) - it just labels the swatch
-                the same "icon means something" way Group/Align/Rotate's own
-                buttons read, instead of leaving it the one unlabeled color
-                square in the row. */}
-            <span
-              title="Fill color"
-              className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-line pl-1.5 pr-0.5 text-soft"
-            >
-              <FillIcon />
-              <input
-                ref={fillColorInputRef}
-                type="color"
-                defaultValue={currentFillColor}
-                title="Fill color"
-                aria-label="Fill color"
-                className="h-6 w-6 shrink-0 cursor-pointer rounded p-0.5"
-              />
-            </span>
+            {divider}
 
-            {showLineStyleControl && (
-              <>
+            <FormatGroup label="Text">
+              <input
+                ref={colorInputRef}
+                type="color"
+                defaultValue={formatTarget.textColor ?? '#14121f'}
+                title="Text color"
+                aria-label="Text color"
+                className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-line p-0.5"
+              />
+
+              <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+                <button
+                  type="button"
+                  onClick={() => updateFormat({ bold: !formatTarget.bold })}
+                  aria-pressed={Boolean(formatTarget.bold)}
+                  title="Bold"
+                  aria-label="Bold"
+                  className={`flex h-8 w-8 items-center justify-center text-[13px] font-bold transition-colors hover:bg-surface-soft ${
+                    formatTarget.bold ? 'bg-surface-soft text-ink' : 'text-body'
+                  }`}
+                >
+                  B
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateFormat({ italic: !formatTarget.italic })}
+                  aria-pressed={Boolean(formatTarget.italic)}
+                  title="Italic"
+                  aria-label="Italic"
+                  className={`flex h-8 w-8 items-center justify-center border-l border-line text-[13px] italic transition-colors hover:bg-surface-soft ${
+                    formatTarget.italic ? 'bg-surface-soft text-ink' : 'text-body'
+                  }`}
+                >
+                  I
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateFormat({ underline: !formatTarget.underline })}
+                  aria-pressed={Boolean(formatTarget.underline)}
+                  title="Underline"
+                  aria-label="Underline"
+                  className={`flex h-8 w-8 items-center justify-center border-l border-line text-[13px] underline transition-colors hover:bg-surface-soft ${
+                    formatTarget.underline ? 'bg-surface-soft text-ink' : 'text-body'
+                  }`}
+                >
+                  U
+                </button>
+              </div>
+
+              {/* Text align - left/center/right of the text *within*
+                  formatTarget's own box, via the same generic textAlign patch
+                  field textFormatStyle applies (see that file's own comment).
+                  None of the three shows pressed when formatTarget.textAlign
+                  is unset, rather than guessing 'left' - an untouched shape's
+                  *actual* alignment varies by type (most center their text,
+                  a few like label don't), and there's no single default here
+                  that would be honest for all of them. */}
+              <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+                <button
+                  type="button"
+                  onClick={() => updateFormat({ textAlign: 'left' })}
+                  aria-pressed={formatTarget.textAlign === 'left'}
+                  title="Align text left"
+                  aria-label="Align text left"
+                  className={`flex h-8 w-8 items-center justify-center transition-colors hover:bg-surface-soft ${
+                    formatTarget.textAlign === 'left' ? 'bg-surface-soft text-ink' : 'text-body'
+                  }`}
+                >
+                  <TextAlignLeftIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateFormat({ textAlign: 'center' })}
+                  aria-pressed={formatTarget.textAlign === 'center'}
+                  title="Align text center"
+                  aria-label="Align text center"
+                  className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
+                    formatTarget.textAlign === 'center' ? 'bg-surface-soft text-ink' : 'text-body'
+                  }`}
+                >
+                  <TextAlignCenterIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateFormat({ textAlign: 'right' })}
+                  aria-pressed={formatTarget.textAlign === 'right'}
+                  title="Align text right"
+                  aria-label="Align text right"
+                  className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
+                    formatTarget.textAlign === 'right' ? 'bg-surface-soft text-ink' : 'text-body'
+                  }`}
+                >
+                  <TextAlignRightIcon />
+                </button>
+              </div>
+            </FormatGroup>
+
+            {divider}
+
+            <FormatGroup label="Style">
+              {/* Fill - one control shared by shapes (any type, including
+                  label - see Shape.jsx) and arrows, since formatTarget is
+                  always exactly one or the other and currentFillColor/the
+                  commit effect above already resolve to the right field
+                  either way. FillIcon is purely decorative (the swatch itself
+                  is still the real, only control) - it just labels the swatch
+                  the same "icon means something" way Group/Align/Rotate's own
+                  buttons read, instead of leaving it the one unlabeled color
+                  square in the row. */}
+              <span
+                title="Fill color"
+                className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-line pl-1.5 pr-0.5 text-soft"
+              >
+                <FillIcon />
+                <input
+                  ref={fillColorInputRef}
+                  type="color"
+                  defaultValue={currentFillColor}
+                  title="Fill color"
+                  aria-label="Fill color"
+                  className="h-6 w-6 shrink-0 cursor-pointer rounded p-0.5"
+                />
+              </span>
+
+              {showLineStyleControl && (
                 <button
                   ref={lineStyleTriggerRef}
                   type="button"
@@ -961,133 +1274,9 @@ function EditorTopbar({ canvasNodeRef }) {
                 >
                   <LineStyleIcon />
                 </button>
+              )}
 
-                {lineStylePopover.open &&
-                  lineStylePopover.pos &&
-                  createPortal(
-                    <div
-                      ref={lineStylePanelRef}
-                      className="fixed z-30 w-32 rounded-xl border border-line bg-white p-1 shadow-lg"
-                      style={lineStylePopover.pos}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setLineStyle('solid')}
-                        className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                          currentLineStyle === 'solid' ? 'bg-surface-soft text-ink' : 'text-body'
-                        }`}
-                      >
-                        Solid
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLineStyle('dashed')}
-                        className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                          currentLineStyle === 'dashed' ? 'bg-surface-soft text-ink' : 'text-body'
-                        }`}
-                      >
-                        Dashed
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLineStyle('dotted')}
-                        className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                          currentLineStyle === 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
-                        }`}
-                      >
-                        Dotted
-                      </button>
-                    </div>,
-                    document.body,
-                  )}
-              </>
-            )}
-
-            <input
-              ref={colorInputRef}
-              type="color"
-              defaultValue={formatTarget.textColor ?? '#14121f'}
-              title="Text color"
-              aria-label="Text color"
-              className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-line p-0.5"
-            />
-
-            <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
-              <button
-                type="button"
-                onClick={() => updateFormat({ bold: !formatTarget.bold })}
-                aria-pressed={Boolean(formatTarget.bold)}
-                title="Bold"
-                aria-label="Bold"
-                className={`flex h-8 w-8 items-center justify-center text-[13px] font-bold transition-colors hover:bg-surface-soft ${
-                  formatTarget.bold ? 'bg-surface-soft text-ink' : 'text-body'
-                }`}
-              >
-                B
-              </button>
-              <button
-                type="button"
-                onClick={() => updateFormat({ italic: !formatTarget.italic })}
-                aria-pressed={Boolean(formatTarget.italic)}
-                title="Italic"
-                aria-label="Italic"
-                className={`flex h-8 w-8 items-center justify-center border-l border-line text-[13px] italic transition-colors hover:bg-surface-soft ${
-                  formatTarget.italic ? 'bg-surface-soft text-ink' : 'text-body'
-                }`}
-              >
-                I
-              </button>
-            </div>
-
-            {/* Text align - left/center/right of the text *within*
-                formatTarget's own box, via the same generic textAlign patch
-                field textFormatStyle applies (see that file's own comment).
-                None of the three shows pressed when formatTarget.textAlign
-                is unset, rather than guessing 'left' - an untouched shape's
-                *actual* alignment varies by type (most center their text,
-                a few like label don't), and there's no single default here
-                that would be honest for all of them. */}
-            <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
-              <button
-                type="button"
-                onClick={() => updateFormat({ textAlign: 'left' })}
-                aria-pressed={formatTarget.textAlign === 'left'}
-                title="Align text left"
-                aria-label="Align text left"
-                className={`flex h-8 w-8 items-center justify-center transition-colors hover:bg-surface-soft ${
-                  formatTarget.textAlign === 'left' ? 'bg-surface-soft text-ink' : 'text-body'
-                }`}
-              >
-                <TextAlignLeftIcon />
-              </button>
-              <button
-                type="button"
-                onClick={() => updateFormat({ textAlign: 'center' })}
-                aria-pressed={formatTarget.textAlign === 'center'}
-                title="Align text center"
-                aria-label="Align text center"
-                className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
-                  formatTarget.textAlign === 'center' ? 'bg-surface-soft text-ink' : 'text-body'
-                }`}
-              >
-                <TextAlignCenterIcon />
-              </button>
-              <button
-                type="button"
-                onClick={() => updateFormat({ textAlign: 'right' })}
-                aria-pressed={formatTarget.textAlign === 'right'}
-                title="Align text right"
-                aria-label="Align text right"
-                className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
-                  formatTarget.textAlign === 'right' ? 'bg-surface-soft text-ink' : 'text-body'
-                }`}
-              >
-                <TextAlignRightIcon />
-              </button>
-            </div>
-
-            {showShapeBorderControls && (
-              <>
+              {showShapeBorderControls && (
                 <button
                   ref={cornerTriggerRef}
                   type="button"
@@ -1101,92 +1290,315 @@ function EditorTopbar({ canvasNodeRef }) {
                 >
                   <CornerRadiusIcon />
                 </button>
+              )}
+            </FormatGroup>
 
-                {cornerPopover.open &&
-                  cornerPopover.pos &&
+            {showLineStyleControl &&
+              lineStylePopover.open &&
+              lineStylePopover.pos &&
+              createPortal(
+                <div
+                  ref={lineStylePanelRef}
+                  className="fixed z-30 w-32 rounded-xl border border-line bg-white p-1 shadow-lg"
+                  style={lineStylePopover.pos}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setLineStyle('solid')}
+                    className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
+                      currentLineStyle === 'solid' ? 'bg-surface-soft text-ink' : 'text-body'
+                    }`}
+                  >
+                    Solid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLineStyle('dashed')}
+                    className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
+                      currentLineStyle === 'dashed' ? 'bg-surface-soft text-ink' : 'text-body'
+                    }`}
+                  >
+                    Dashed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLineStyle('dotted')}
+                    className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
+                      currentLineStyle === 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
+                    }`}
+                  >
+                    Dotted
+                  </button>
+                </div>,
+                document.body,
+              )}
+
+            {showShapeBorderControls &&
+              cornerPopover.open &&
+              cornerPopover.pos &&
+              createPortal(
+                <div
+                  ref={cornerPanelRef}
+                  className="fixed z-30 flex w-48 -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-xl border border-line bg-white p-3 shadow-lg"
+                  style={{ left: cornerPopover.pos.left, top: cornerPopover.pos.top }}
+                >
+                  <span className="shrink-0 text-[12px] font-medium text-soft">Corner radius</span>
+                  <input
+                    type="range"
+                    min={MIN_CORNER_RADIUS}
+                    max={MAX_CORNER_RADIUS}
+                    value={currentCornerRadius}
+                    onChange={(event) => updateCornerRadius(Number(event.target.value))}
+                    // Coalesced into one undo step per drag (see
+                    // CONTINUOUS_TYPES in historyReducer.js) - these three
+                    // close that gesture out, covering mouse release,
+                    // releasing an arrow key, and losing focus entirely,
+                    // so it can never get stuck open the way a drag
+                    // lacking its matching DRAG_END would (see that
+                    // file's own comment on exactly this failure mode).
+                    onPointerUp={() => dispatch({ type: 'DRAG_END' })}
+                    onKeyUp={() => dispatch({ type: 'DRAG_END' })}
+                    onBlur={() => dispatch({ type: 'DRAG_END' })}
+                    title="Corner radius"
+                    aria-label="Corner radius"
+                    className="h-1.5 min-w-0 flex-1 shrink-0 cursor-pointer accent-brand-purple"
+                  />
+                  <span className="w-6 shrink-0 text-right text-[12.5px] font-medium text-ink">
+                    {currentCornerRadius}
+                  </span>
+                </div>,
+                document.body,
+              )}
+
+            {/* Arrow-only: connector geometry (straight/curved/orthogonal/
+                ERD) and which end(s) show a triangle head - both previously
+                only choosable at draw time (EditorSidebar's Draw Arrow
+                dropdown), now editable on an arrow that already exists. */}
+            {selectedArrow && (
+              <>
+                {divider}
+
+                <FormatGroup label="Arrow">
+                  <button
+                    ref={connectorTypeTriggerRef}
+                    type="button"
+                    onClick={connectorTypePopover.toggle}
+                    aria-haspopup="true"
+                    aria-expanded={connectorTypePopover.open}
+                    aria-pressed={connectorTypePopover.open}
+                    title="Connector type"
+                    aria-label="Connector type"
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
+                      connectorTypePopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                    }`}
+                  >
+                    <ConnectorTypeIcon type={currentConnectorType} />
+                  </button>
+
+                  {showArrowHeadControl && (
+                    <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+                      <button
+                        type="button"
+                        onClick={() => setArrowHeads(false, true)}
+                        aria-pressed={!currentStartArrow && currentEndArrow}
+                        title="Arrowhead at end"
+                        aria-label="Arrowhead at end"
+                        className={`flex h-8 w-8 items-center justify-center transition-colors hover:bg-surface-soft ${
+                          !currentStartArrow && currentEndArrow ? 'bg-surface-soft text-ink' : 'text-body'
+                        }`}
+                      >
+                        <ArrowHeadEndIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setArrowHeads(true, true)}
+                        aria-pressed={currentStartArrow && currentEndArrow}
+                        title="Arrowhead at both ends"
+                        aria-label="Arrowhead at both ends"
+                        className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
+                          currentStartArrow && currentEndArrow ? 'bg-surface-soft text-ink' : 'text-body'
+                        }`}
+                      >
+                        <ArrowHeadBothIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setArrowHeads(false, false)}
+                        aria-pressed={!currentStartArrow && !currentEndArrow}
+                        title="No arrowheads"
+                        aria-label="No arrowheads"
+                        className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
+                          !currentStartArrow && !currentEndArrow ? 'bg-surface-soft text-ink' : 'text-body'
+                        }`}
+                      >
+                        <ArrowHeadNoneIcon />
+                      </button>
+                    </div>
+                  )}
+                </FormatGroup>
+
+                {connectorTypePopover.open &&
+                  connectorTypePopover.pos &&
                   createPortal(
                     <div
-                      ref={cornerPanelRef}
-                      className="fixed z-30 flex w-48 -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-xl border border-line bg-white p-3 shadow-lg"
-                      style={{ left: cornerPopover.pos.left, top: cornerPopover.pos.top }}
+                      ref={connectorTypePanelRef}
+                      className="fixed z-30 w-40 rounded-xl border border-line bg-white p-1 shadow-lg"
+                      style={connectorTypePopover.pos}
                     >
-                      <span className="shrink-0 text-[12px] font-medium text-soft">Corner radius</span>
-                      <input
-                        type="range"
-                        min={MIN_CORNER_RADIUS}
-                        max={MAX_CORNER_RADIUS}
-                        value={currentCornerRadius}
-                        onChange={(event) => updateCornerRadius(Number(event.target.value))}
-                        // Coalesced into one undo step per drag (see
-                        // CONTINUOUS_TYPES in historyReducer.js) - these three
-                        // close that gesture out, covering mouse release,
-                        // releasing an arrow key, and losing focus entirely,
-                        // so it can never get stuck open the way a drag
-                        // lacking its matching DRAG_END would (see that
-                        // file's own comment on exactly this failure mode).
-                        onPointerUp={() => dispatch({ type: 'DRAG_END' })}
-                        onKeyUp={() => dispatch({ type: 'DRAG_END' })}
-                        onBlur={() => dispatch({ type: 'DRAG_END' })}
-                        title="Corner radius"
-                        aria-label="Corner radius"
-                        className="h-1.5 min-w-0 flex-1 shrink-0 cursor-pointer accent-brand-purple"
-                      />
-                      <span className="w-6 shrink-0 text-right text-[12.5px] font-medium text-ink">
-                        {currentCornerRadius}
-                      </span>
+                      {ARROW_CONNECTOR_TYPES.map((c) => (
+                        <button
+                          key={c.key}
+                          type="button"
+                          onClick={() => setConnectorType(c.key)}
+                          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
+                            currentConnectorType === c.key ? 'bg-surface-soft text-ink' : 'text-body'
+                          }`}
+                        >
+                          <ConnectorTypeIcon type={c.key} />
+                          {c.label}
+                        </button>
+                      ))}
                     </div>,
                     document.body,
                   )}
               </>
             )}
-          </div>
+
+            {divider}
+
+            <FormatGroup label="Opacity">
+              <button
+                ref={opacityTriggerRef}
+                type="button"
+                onClick={opacityPopover.toggle}
+                aria-haspopup="true"
+                aria-expanded={opacityPopover.open}
+                aria-pressed={opacityPopover.open}
+                title="Opacity"
+                aria-label="Opacity"
+                className={`flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-line px-2 text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
+                  opacityPopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                }`}
+              >
+                <OpacityIcon />
+                {currentOpacity}%
+              </button>
+            </FormatGroup>
+
+            {opacityPopover.open &&
+              opacityPopover.pos &&
+              createPortal(
+                <div
+                  ref={opacityPanelRef}
+                  className="fixed z-30 flex w-48 -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-xl border border-line bg-white p-3 shadow-lg"
+                  style={{ left: opacityPopover.pos.left, top: opacityPopover.pos.top }}
+                >
+                  <span className="shrink-0 text-[12px] font-medium text-soft">Opacity</span>
+                  <input
+                    type="range"
+                    min={MIN_OPACITY}
+                    max={MAX_OPACITY}
+                    value={currentOpacity}
+                    onChange={(event) => updateOpacity(Number(event.target.value))}
+                    // Same coalesced-into-one-undo-step reasoning as the
+                    // corner radius slider above.
+                    onPointerUp={() => dispatch({ type: 'DRAG_END' })}
+                    onKeyUp={() => dispatch({ type: 'DRAG_END' })}
+                    onBlur={() => dispatch({ type: 'DRAG_END' })}
+                    title="Opacity"
+                    aria-label="Opacity"
+                    className="h-1.5 min-w-0 flex-1 shrink-0 cursor-pointer accent-brand-purple"
+                  />
+                  <span className="w-9 shrink-0 text-right text-[12.5px] font-medium text-ink">
+                    {currentOpacity}%
+                  </span>
+                </div>,
+                document.body,
+              )}
+          </>
         )}
 
-        {/* Group/Align/Rotate - outside formatTarget's own gating above (see
-            hasShapeSelectionAny's own comment) since Group/Align only ever
+        {/* Arrange/Align/Group - outside formatTarget's own gating above (see
+            hasShapeSelectionAny's own comment) since Align/Group only ever
             make sense for a multi-shape selection, which is exactly when
-            formatTarget is null. Rotate alone works for either a single
-            shape or a whole multi-selection. */}
+            formatTarget is null. Rotate/front-back/Duplicate alone work for
+            either a single shape or a whole multi-selection. */}
         {activeTab === 'format' && hasShapeSelectionAny && !readOnly && (
-          <div className="flex shrink-0 items-center gap-1.5 self-center">
-            <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+          <>
+            {formatTarget && divider}
+
+            <FormatGroup label="Arrange">
+              <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+                <button
+                  type="button"
+                  onClick={() => rotateSelected(-90)}
+                  title="Rotate left 90°"
+                  aria-label="Rotate left 90°"
+                  className="flex h-8 w-8 items-center justify-center text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                >
+                  <RotateLeftIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => rotateSelected(90)}
+                  title="Rotate right 90°"
+                  aria-label="Rotate right 90°"
+                  className="flex h-8 w-8 items-center justify-center border-l border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                >
+                  <RotateRightIcon />
+                </button>
+              </div>
+
               <button
                 type="button"
-                onClick={() => rotateSelected(-90)}
-                title="Rotate left 90°"
-                aria-label="Rotate left 90°"
-                className="flex h-8 w-8 items-center justify-center text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                onClick={() => dispatch({ type: 'BRING_TO_FRONT' })}
+                title="Bring to front"
+                aria-label="Bring to front"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
               >
-                <RotateLeftIcon />
+                <BringToFrontIcon />
               </button>
               <button
                 type="button"
-                onClick={() => rotateSelected(90)}
-                title="Rotate right 90°"
-                aria-label="Rotate right 90°"
-                className="flex h-8 w-8 items-center justify-center border-l border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                onClick={() => dispatch({ type: 'SEND_TO_BACK' })}
+                title="Send to back"
+                aria-label="Send to back"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
               >
-                <RotateRightIcon />
+                <SendToBackIcon />
               </button>
-            </div>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'DUPLICATE_SELECTED' })}
+                title="Duplicate (Ctrl+D)"
+                aria-label="Duplicate"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+              >
+                <DuplicateIcon />
+              </button>
+            </FormatGroup>
 
             {hasMultiShapeSelection && (
               <>
-                <button
-                  ref={alignTriggerRef}
-                  type="button"
-                  onClick={alignPopover.toggle}
-                  aria-haspopup="true"
-                  aria-expanded={alignPopover.open}
-                  aria-pressed={alignPopover.open}
-                  title="Align"
-                  aria-label="Align"
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
-                    alignPopover.open ? 'bg-surface-soft text-ink' : 'text-body'
-                  }`}
-                >
-                  <AlignLeftIcon />
-                </button>
+                {divider}
+
+                <FormatGroup label="Align">
+                  <button
+                    ref={alignTriggerRef}
+                    type="button"
+                    onClick={alignPopover.toggle}
+                    aria-haspopup="true"
+                    aria-expanded={alignPopover.open}
+                    aria-pressed={alignPopover.open}
+                    title="Align"
+                    aria-label="Align"
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
+                      alignPopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                    }`}
+                  >
+                    <AlignLeftIcon />
+                  </button>
+                </FormatGroup>
 
                 {alignPopover.open &&
                   alignPopover.pos &&
@@ -1254,18 +1666,20 @@ function EditorTopbar({ canvasNodeRef }) {
                     document.body,
                   )}
 
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: canUngroup ? 'UNGROUP_SELECTED' : 'GROUP_SELECTED' })}
-                  title={canUngroup ? 'Ungroup' : 'Group'}
-                  aria-label={canUngroup ? 'Ungroup' : 'Group'}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
-                >
-                  {canUngroup ? <UngroupIcon /> : <GroupIcon />}
-                </button>
+                <FormatGroup label="Group">
+                  <button
+                    type="button"
+                    onClick={() => dispatch({ type: canUngroup ? 'UNGROUP_SELECTED' : 'GROUP_SELECTED' })}
+                    title={canUngroup ? 'Ungroup' : 'Group'}
+                    aria-label={canUngroup ? 'Ungroup' : 'Group'}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                  >
+                    {canUngroup ? <UngroupIcon /> : <GroupIcon />}
+                  </button>
+                </FormatGroup>
               </>
             )}
-          </div>
+          </>
         )}
 
         {/* The tab itself is always clickable now (see activeTab's own

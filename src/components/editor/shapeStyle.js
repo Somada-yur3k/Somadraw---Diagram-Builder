@@ -45,6 +45,22 @@ export function clampCornerRadius(radius) {
   return Math.min(MAX_CORNER_RADIUS, Math.max(MIN_CORNER_RADIUS, radius))
 }
 
+// Shared by both shapes and arrows (SET_SHAPE_OPACITY/SET_ARROW_OPACITY in
+// useDiagramEditor.js) - one control, same as Fill/Line style already are.
+// Floored at 10, not 0: this app has already had more than one bug report
+// about elements silently going invisible (arrows clipped out of the SVG
+// viewBox, a shape dragged off into unreachable space), so letting opacity
+// itself become a fresh way to lose track of an element on canvas would be
+// working against that same effort. 10% stays clearly visible while still
+// reading as "faded" for whatever the user's dimming it for.
+export const MIN_OPACITY = 10
+export const MAX_OPACITY = 100
+export const DEFAULT_OPACITY = 100
+
+export function clampOpacity(opacity) {
+  return Math.min(MAX_OPACITY, Math.max(MIN_OPACITY, opacity))
+}
+
 // Same idea as corner radius, for each type's current fill/border theme
 // color (currently a fixed Tailwind brand color per type). Label has no
 // *default* theme color (it renders with no border/background until a fill

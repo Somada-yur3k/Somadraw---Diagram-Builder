@@ -1269,6 +1269,13 @@ function Shape({
           }`}
           style={{
             ...cornerStyle,
+            // Scoped to this div (the shape's own visual body - fill,
+            // border, text) rather than the outer wrapper two levels up,
+            // so a faded shape's resize/rotate handles and delete button
+            // (siblings of this div, not descendants - see ShapeHandles/
+            // DeleteButton below) stay at full visibility and stay just as
+            // usable, even at this shape's own lowest opacity setting.
+            opacity: shape.opacity != null ? shape.opacity / 100 : undefined,
             ...(isConnectHover
               ? {
                   boxShadow:

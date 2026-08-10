@@ -22,8 +22,16 @@ const ArrowLabel = memo(function ArrowLabel({
   const rotateRef = useRef(null)
   const labelRef = useRef(null)
 
-  const x = labelAnchorX + (arrow.labelOffsetX ?? 0)
-  const y = labelAnchorY + (arrow.labelOffsetY ?? 0)
+  // Locked (labelLockX/Y set - see TOGGLE_ARROW_LABEL_LOCK in
+  // useDiagramEditor.js): anchor to that frozen point instead of the live
+  // labelAnchor computeArrowRoute just recomputed from the connected
+  // shapes' current positions/sides, so moving, resizing, or rerouting
+  // either end no longer drags the label along with it.
+  const isLocked = arrow.labelLockX != null
+  const anchorX = isLocked ? arrow.labelLockX : labelAnchorX
+  const anchorY = isLocked ? arrow.labelLockY : labelAnchorY
+  const x = anchorX + (arrow.labelOffsetX ?? 0)
+  const y = anchorY + (arrow.labelOffsetY ?? 0)
   const rotation = arrow.labelRotation ?? 0
 
   const handlePointerDown = (event) => {
@@ -119,7 +127,15 @@ const ArrowLabel = memo(function ArrowLabel({
               ? 'border-brand-purple/40 bg-white text-ink'
               : 'border-line bg-white text-body'
           }`}
-          style={textFormatStyle(arrow)}
+          // Opacity lives on the label pill itself (not the outer wrapper
+          // this sits inside) so it fades the label's own border/background/
+          // text without also fading the rotate handle/lock/remove buttons
+          // that mount as its siblings while selected - same "content fades,
+          // editing chrome doesn't" split ShapeBody's own opacity uses.
+          style={{
+            ...textFormatStyle(arrow),
+            opacity: arrow.opacity != null ? arrow.opacity / 100 : undefined,
+          }}
         />
 
         {isSelected && (
@@ -152,6 +168,38 @@ const ArrowLabel = memo(function ArrowLabel({
             className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full border border-line bg-white text-[10px] leading-none text-soft shadow-sm hover:border-rose-300 hover:text-rose-500"
           >
             ×
+          </button>
+        )}
+        {isSelected && arrow.label && (
+          <button
+            type="button"
+            data-no-drag
+            onClick={(event) => {
+              event.stopPropagation()
+              // anchorX/Y (already computed above from whichever anchor is
+              // currently in effect) is exactly what TOGGLE_ARROW_LABEL_LOCK
+              // needs to (un)freeze against without a visual jump - see its
+              // own comment in useDiagramEditor.js.
+              dispatch({ type: 'TOGGLE_ARROW_LABEL_LOCK', id: arrow.id, anchorX, anchorY })
+            }}
+            title={isLocked ? 'Unlock label position' : 'Lock label position'}
+            className={`absolute -left-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full border bg-white shadow-sm ${
+              isLocked
+                ? 'border-brand-purple/40 text-brand-purple hover:border-brand-purple'
+                : 'border-line text-soft hover:border-brand-purple/40 hover:text-brand-purple'
+            }`}
+          >
+            {isLocked ? (
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="11" width="14" height="10" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+              </svg>
+            ) : (
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="11" width="14" height="10" rx="2" />
+                <path d="M8 11V7a4 4 0 0 1 7.4-2" />
+              </svg>
+            )}
           </button>
         )}
       </div>
