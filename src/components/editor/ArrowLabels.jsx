@@ -33,6 +33,13 @@ const ArrowLabel = memo(function ArrowLabel({
   const x = anchorX + (arrow.labelOffsetX ?? 0)
   const y = anchorY + (arrow.labelOffsetY ?? 0)
   const rotation = arrow.labelRotation ?? 0
+  // The arrow's own line color at full strength (same fallback ArrowLayer.jsx
+  // uses for the line itself when no color has been picked), not a tint of
+  // it - changing the arrow's color (SET_ARROW_COLOR, the Style group's Fill
+  // swatch in EditorTopbar) re-renders this along with the line, so the two
+  // always stay in sync automatically - no separate field to keep in sync
+  // by hand.
+  const labelBg = arrow.color || 'var(--color-soft)'
 
   const handlePointerDown = (event) => {
     if (event.target.closest('[data-no-drag]')) return
@@ -122,11 +129,11 @@ const ArrowLabel = memo(function ArrowLabel({
           // (Shift+Enter in EditableText) so a label can span 2+ rows,
           // while a single-line label with no "\n" in it still renders
           // exactly as before (no width constraint here to force wrapping).
-          className={`block whitespace-pre-wrap rounded-md border px-1.5 py-0.5 text-center text-[11px] font-medium shadow-sm ${
-            isSelected
-              ? 'border-brand-purple/40 bg-white text-ink'
-              : 'border-line bg-white text-body'
-          }`}
+          // No border/outline - just the pill itself (background is
+          // labelBg, the arrow's own color, set via style below since it's
+          // computed, not expressible as a static Tailwind class) with white
+          // text against it, selected or not.
+          className="block whitespace-pre-wrap rounded-md px-1 py-px text-center text-[11px] font-medium text-white shadow-sm"
           // Opacity lives on the label pill itself (not the outer wrapper
           // this sits inside) so it fades the label's own border/background/
           // text without also fading the rotate handle/lock/remove buttons
@@ -134,6 +141,7 @@ const ArrowLabel = memo(function ArrowLabel({
           // editing chrome doesn't" split ShapeBody's own opacity uses.
           style={{
             ...textFormatStyle(arrow),
+            backgroundColor: labelBg,
             opacity: arrow.opacity != null ? arrow.opacity / 100 : undefined,
           }}
         />
