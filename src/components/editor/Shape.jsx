@@ -319,6 +319,23 @@ function ErdRowTypeControl({ value, onCommit, disableDblClick }) {
   )
 }
 
+// Always-visible (not hover-only, unlike the per-row remove button below) -
+// a touch user has no hover state to reveal it with, and this is the one
+// control in a row that's specifically meant to be touchable/draggable, so
+// it has to already be there to find.
+function ErdRowDragHandleIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
+      <circle cx="8" cy="5" r="2.2" />
+      <circle cx="16" cy="5" r="2.2" />
+      <circle cx="8" cy="12" r="2.2" />
+      <circle cx="16" cy="12" r="2.2" />
+      <circle cx="8" cy="19" r="2.2" />
+      <circle cx="16" cy="19" r="2.2" />
+    </svg>
+  )
+}
+
 // ERD table - same plain white-card-with-a-colored-header look every other
 // container here (umlClass, swimlanes) already uses, not a fully-filled
 // dark card - only the header compartment gets `fill`'s solid color (like
@@ -335,10 +352,63 @@ function ErdRowTypeControl({ value, onCommit, disableDblClick }) {
 // the header (a fixed-height row that doesn't grow) rather than as its own
 // extra row, which would silently throw that height math off by one row
 // every time.
-function ErdTableBody({ shape, dispatch, disableDblClick, cornerStyle, fill, borderStyleValue }) {
+function ErdTableBody({ shape, dispatch, disableDblClick, cornerStyle, fill, borderStyleValue, zoom }) {
   const commitText = (value) => dispatch({ type: 'RENAME_SHAPE', id: shape.id, field: 'text', value })
   const commitRow = (rowId, field) => (value) =>
     dispatch({ type: 'UPDATE_ERD_ROW', id: shape.id, rowId, field, value })
+
+  // Drag-to-reorder rows - pointer events (not HTML5 drag-and-drop), same
+  // as every other drag gesture in this app, so it already works the same
+  // with mouse, touch, and pen with no separate touch handling needed.
+  // Anchored to where the drag *started* (startIndex/startClientY) rather
+  // than accumulated step by step, so each move recomputes the row's
+  // intended index fresh from that same anchor - a fast flick to the very
+  // top/bottom always lands correctly even when intermediate row positions
+  // were never actually rendered in between. REORDER_ERD_ROW itself takes
+  // the row's *current* position from shape.rows (not a value this ref
+  // tracks), so re-dispatching it repeatedly here as the drag crosses each
+  // row boundary stays correct regardless of how many times it's already
+  // fired this gesture.
+  const rowDragRef = useRef(null)
+
+  const beginRowDrag = (rowId, index, event) => {
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    rowDragRef.current = {
+      pointerId: event.pointerId,
+      rowId,
+      startIndex: index,
+      startClientY: event.clientY,
+      lastTargetIndex: index,
+    }
+  }
+
+  const handleRowDragMove = (event) => {
+    const drag = rowDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    // /zoom: ERD_ROW_HEIGHT is a logical/canvas-space size, but clientY
+    // deltas arrive in screen pixels - at any zoom other than 100% those
+    // aren't the same thing, so this would misjudge how many rows the
+    // pointer actually crossed without converting back to logical space
+    // first (same reasoning every other pointer-drag gesture in this app
+    // already applies to its own dx/dy).
+    const deltaY = (event.clientY - drag.startClientY) / zoom
+    const deltaRows = Math.round(deltaY / ERD_ROW_HEIGHT)
+    const targetIndex = Math.max(0, Math.min(shape.rows.length - 1, drag.startIndex + deltaRows))
+    if (targetIndex === drag.lastTargetIndex) return
+    drag.lastTargetIndex = targetIndex
+    dispatch({ type: 'REORDER_ERD_ROW', id: shape.id, rowId: drag.rowId, toIndex: targetIndex })
+  }
+
+  const endRowDrag = (event) => {
+    const drag = rowDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    rowDragRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    dispatch({ type: 'DRAG_END' })
+  }
 
   return (
     <div
@@ -375,11 +445,24 @@ function ErdTableBody({ shape, dispatch, disableDblClick, cornerStyle, fill, bor
         {shape.rows.map((row, i) => (
           <div
             key={row.id}
-            className={`group/row flex items-center gap-1.5 px-2 ${
+            className={`group/row flex items-center gap-1 px-1.5 ${
               i < shape.rows.length - 1 ? 'border-b border-line' : ''
             }`}
             style={{ height: ERD_ROW_HEIGHT }}
           >
+            <button
+              type="button"
+              data-no-drag
+              onPointerDown={(event) => beginRowDrag(row.id, i, event)}
+              onPointerMove={handleRowDragMove}
+              onPointerUp={endRowDrag}
+              onPointerCancel={endRowDrag}
+              title="Drag to reorder"
+              aria-label="Drag to reorder"
+              className="flex h-full w-3.5 shrink-0 cursor-grab touch-none items-center justify-center text-soft/50 transition-colors hover:text-soft active:cursor-grabbing"
+            >
+              <ErdRowDragHandleIcon />
+            </button>
             <ErdRowKeyControl value={row.key} onSelect={commitRow(row.id, 'key')} />
             <EditableText
               value={row.name}
@@ -409,7 +492,7 @@ function ErdTableBody({ shape, dispatch, disableDblClick, cornerStyle, fill, bor
   )
 }
 
-function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers }) {
+function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers, zoom }) {
   const commitField = (field) => (value) =>
     dispatch({ type: 'RENAME_SHAPE', id: shape.id, field, value })
   const textStyle = textFormatStyle(shape)
@@ -490,38 +573,41 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers }) {
   }
 
   if (shape.type === 'store') {
-    // Two-compartment table layout (badge cell | label cell), full border
-    // on all sides plus a vertical divider between them - replaces the old
-    // open-ended (top/bottom border only) Gane-Sarson look with the
-    // fully-boxed style requested from a reference image.
+    // Two-compartment table layout (badge cell | label cell) - the
+    // traditional open-ended Gane-Sarson data store symbol: closed on top/
+    // left/bottom, deliberately no line at all on the right (border-t/l/b
+    // only, no border-r) - only the left side gets rounded to match, since
+    // there's no right corner to round when that edge has no border to
+    // begin with. One uniform tint shared across both cells (not two
+    // different opacities), both fields bold - matching the reference
+    // image. The shared background lives on this outer div alone (fillTint
+    // applied once here, not per-cell) so the divider between cells reads
+    // as the only visual break, not a second background seam next to it.
     return (
       <div
-        className="flex h-full w-full overflow-hidden border-2 border-brand-blue/60"
-        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue }}
+        className="flex h-full w-full overflow-hidden rounded-l-lg border-l-2 border-t-2 border-b-2 border-brand-blue/60 bg-brand-blue/8"
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
       >
         <div
-          className="flex w-14 shrink-0 items-center justify-center border-r-2 border-brand-blue/60 bg-brand-blue/10 px-1"
-          style={{ borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
+          className="flex w-14 shrink-0 items-center justify-center border-r-2 border-brand-blue/60 px-1"
+          style={{ borderColor: fill || undefined, borderStyle: borderStyleValue }}
         >
           <EditableText
             value={shape.badge}
             onCommit={commitField('badge')}
             placeholder="D#"
             disableDblClick={disableDblClick}
-            className="w-full text-center text-[12px] font-bold leading-none text-ink"
+            className="w-full text-center text-[13px] font-bold leading-none text-ink"
           />
         </div>
-        <div
-          className="flex flex-1 items-center justify-center bg-brand-blue/6 px-2"
-          style={{ backgroundColor: fillTint }}
-        >
+        <div className="flex flex-1 items-center justify-center px-2">
           <EditableText
             value={shape.text}
             onCommit={commitField('text')}
             placeholder="Data store"
             placeholderOnlyWhileEditing
             disableDblClick={disableDblClick}
-            className="w-full text-center text-[13px] font-medium leading-snug text-ink"
+            className="w-full text-center text-[14px] font-bold leading-snug text-ink"
             style={textStyle}
           />
         </div>
@@ -1032,6 +1118,7 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers }) {
         cornerStyle={cornerStyle}
         fill={fill}
         borderStyleValue={borderStyleValue}
+        zoom={zoom}
       />
     )
   }
@@ -1289,6 +1376,7 @@ function Shape({
             dispatch={dispatch}
             disableDblClick={!isSelectTool || readOnly}
             dragHandlers={dragHandlers}
+            zoom={zoom}
           />
         </div>
         {isContainer && (

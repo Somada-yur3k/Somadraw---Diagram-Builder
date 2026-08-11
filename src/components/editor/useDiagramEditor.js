@@ -767,6 +767,26 @@ function reducer(state, action) {
       return { ...state, shapes: { ...state.shapes, [action.id]: { ...shape, rows } } }
     }
 
+    // Drag-to-reorder (Shape.jsx's ErdTableBody) - action.toIndex is always
+    // the row's *final* destination, not a step, so this stays correct no
+    // matter how the drag got there: re-dispatched on every row-height
+    // crossing during a single gesture, each call independently looks up
+    // the row's own *current* index (not whatever it was at drag-start) and
+    // moves it from there, rather than assuming the caller is tracking
+    // position itself.
+    case 'REORDER_ERD_ROW': {
+      const shape = state.shapes[action.id]
+      if (!shape || shape.type !== 'erdTable') return state
+      const fromIndex = shape.rows.findIndex((row) => row.id === action.rowId)
+      if (fromIndex === -1) return state
+      const toIndex = Math.max(0, Math.min(shape.rows.length - 1, action.toIndex))
+      if (fromIndex === toIndex) return state
+      const rows = [...shape.rows]
+      const [moved] = rows.splice(fromIndex, 1)
+      rows.splice(toIndex, 0, moved)
+      return { ...state, shapes: { ...state.shapes, [action.id]: { ...shape, rows } } }
+    }
+
     case 'SET_SHAPE_FILL_COLOR': {
       const shape = state.shapes[action.id]
       if (!shape) return state

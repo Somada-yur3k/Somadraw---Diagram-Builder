@@ -9,7 +9,7 @@
 export const DEFAULT_CORNER_RADIUS_BY_TYPE = {
   entity: 8,
   process: 16,
-  store: 0,
+  store: 8,
   label: 0,
   flowProcess: 6,
   decision: 0,

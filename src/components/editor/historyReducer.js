@@ -20,6 +20,10 @@ const CONTINUOUS_TYPES = new Set([
   // gesture as corner radius above, just for a different field/target kind.
   'SET_SHAPE_OPACITY',
   'SET_ARROW_OPACITY',
+  // Dragging an ERD row to reorder it (Shape.jsx's ErdTableBody) dispatches
+  // this once per row-height crossed, same "many dispatches, one undo step"
+  // reasoning as every other entry above.
+  'REORDER_ERD_ROW',
 ])
 
 const MAX_HISTORY = 100

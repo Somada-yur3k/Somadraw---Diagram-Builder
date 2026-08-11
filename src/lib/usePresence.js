@@ -6,12 +6,18 @@ const PRESENCE_CHANNEL = 'online-users'
 // Tracks the signed-in user as present on a shared Realtime presence
 // channel for as long as this hook stays mounted, and returns the live,
 // deduplicated list of everyone currently on that same channel - including
-// this user. The only caller today is MonitorPage.jsx (its own standalone
-// page/bundle, monitor.html - see that file's own comment on why), so this
-// connection is only ever opened by whoever is actively viewing that
-// owner-only page, not by every signed-in visitor's whole /workspace
-// session the way it used to be when Dashboard.jsx called this itself and
-// passed the result down via Outlet context.
+// this user. Two callers today, each using a different half of what this
+// gives back: Dashboard.jsx calls it purely for the tracking side effect
+// (every signed-in visitor needs to actually show up as present, not just
+// whoever happens to have Monitor open), discarding the returned list since
+// it has nothing to show with it; MonitorPage.jsx calls it again for that
+// list itself, to render the "Active Users" table on its own owner-only
+// page/bundle (monitor.html - see that file's own comment on why it's
+// separate). Dashboard.jsx and MonitorPage.jsx are different page loads
+// (different HTML entries, never sharing a JS runtime), so both safely
+// mounting a hook on the same channel topic doesn't hit the
+// same-topic-returns-the-same-channel-object pitfall useDiagramChannel.js's
+// own comment describes - that only bites two hooks in the *same* page.
 //
 // Presence is ephemeral - Supabase drops a client's entry the instant it
 // disconnects or the tab closes - so there's no database row to clean up.

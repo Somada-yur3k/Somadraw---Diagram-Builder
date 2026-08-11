@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet } from 'react-router'
 import DashboardSidebar from './DashboardSidebar'
 import UsernamePrompt from './UsernamePrompt'
+import { useOnlineUsers } from '../lib/usePresence'
 
 function MenuIcon() {
   return (
@@ -12,6 +13,16 @@ function MenuIcon() {
 }
 
 function Dashboard({ user, onSignOut }) {
+  // Tracks this user as present on the shared 'online-users' Realtime
+  // channel for as long as they're anywhere in the signed-in app (Dashboard
+  // wraps every route under it) - the return value itself is MonitorPage.jsx's
+  // concern, not this component's; Dashboard's own job is just making sure
+  // the tracking side effect actually runs for every visitor, not only for
+  // whoever happens to have the owner-only Monitor page open. Without this,
+  // that page's "Active Users" list only ever shows the owner's own
+  // presence (from viewing Monitor itself), never anyone actually using the
+  // app - see usePresence.js's own comment on why this call belongs here.
+  useOnlineUsers(user)
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   // Local, not derived purely from `user.user_metadata` - closing this via
