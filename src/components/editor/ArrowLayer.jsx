@@ -157,7 +157,7 @@ const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, di
         d={d}
         fill="none"
         stroke={isSelected ? 'var(--color-brand-purple)' : arrow.color || 'var(--color-soft)'}
-        strokeWidth={isSelected ? 2 : 1.5}
+        strokeWidth={isSelected ? 1.6 : 1.2}
         strokeDasharray={dasharrayForLineStyle(arrow.lineStyle)}
         markerStart={startMarker ? `url(#${startMarker})` : undefined}
         markerEnd={endMarker ? `url(#${endMarker})` : undefined}
@@ -349,18 +349,18 @@ function ArrowLayer() {
             of outward through the shape it's attached to. Same reasoning
             already documented on the ERD markers below, just applied to the
             plain triangle now that it's no longer only ever an end marker. */}
-        <marker id="arrowhead" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto-start-reverse">
-          <polygon points="0 0, 8 3.5, 0 7" fill="var(--color-soft)" />
+        <marker id="arrowhead" markerWidth="7" markerHeight="7" refX="5.5" refY="2.75" orient="auto-start-reverse">
+          <polygon points="0 0, 6 2.75, 0 5.5" fill="var(--color-soft)" />
         </marker>
         <marker
           id="arrowhead-selected"
-          markerWidth="9"
-          markerHeight="9"
-          refX="7"
-          refY="3.5"
+          markerWidth="7"
+          markerHeight="7"
+          refX="5.5"
+          refY="2.75"
           orient="auto-start-reverse"
         >
-          <polygon points="0 0, 8 3.5, 0 7" fill="var(--color-brand-purple)" />
+          <polygon points="0 0, 6 2.75, 0 5.5" fill="var(--color-brand-purple)" />
         </marker>
 
         {/* ERD relationship notation - 6 selectable cardinality glyphs
