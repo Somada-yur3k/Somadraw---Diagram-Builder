@@ -17,22 +17,29 @@ import jsPDF from 'jspdf'
 import { toCanvas } from 'html-to-image'
 import { computeArrowRoute } from './arrowRouting'
 
-// Canvas-logical px of breathing room kept around the shapes' own bounding
-// box - without this the crop would clip right against the outermost
-// shape's edge/border. Kept at least as large as ArrowLayer.jsx's own
-// SVG_PADDING (arrow routing bends/handles can sit a little outside their
-// shape's edge) - a smaller value here would let the arrow layer's own
-// content peek outside the box this export normalizes everything into
-// below, clipping it right back off again.
-const CONTENT_PADDING = 200
+// Canvas-logical px of breathing room kept around the content's own
+// bounding box - without this the crop would clip right against the
+// outermost shape/arrow-point's edge/border. Just a small cosmetic margin,
+// not a defensive guess at how far routing bends/handles might extend past
+// a shape's own edge - contentBounds() below already folds each arrow's
+// actual routed points (start/end/mid-bend/label) into that bounding box
+// directly, so nothing here needs to sit outside it to still get captured.
+const CONTENT_PADDING = 40
 // Rendered at up to 2x the canvas's own CSS px so text and thin borders stay
 // crisp once printed, rather than the fuzzy result of a 1:1 screen capture
 // stretched up to fill an A4 page.
 const CAPTURE_SCALE = 2
 // Safari on iOS silently rasterizes an oversized <canvas> as blank instead
 // of erroring, past a ceiling of roughly 3-5 megapixels depending on device
-// RAM - this is a conservative cap comfortably under that across devices.
-const MAX_CAPTURE_PIXELS = 4_000_000
+// RAM - and every browser on iOS (Chrome, Firefox, etc. included) sits on
+// top of the same WebKit engine Apple mandates there, so this isn't a
+// Safari-specific quirk to route around, it's an iOS one. Everywhere else
+// (desktop, Android) has comfortably higher real canvas limits, so only
+// iOS pays for this conservative a ceiling - a typical diagram elsewhere no
+// longer gets silently downscaled below a full, crisp CAPTURE_SCALE just to
+// stay safe for a device class that was never going to render it anyway.
+const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent)
+const MAX_CAPTURE_PIXELS = isIOS ? 4_000_000 : 16_000_000
 const PAGE_MARGIN_MM = 10
 
 // Bounding box of the actual placed shapes (not the full fixed 2400x1400
