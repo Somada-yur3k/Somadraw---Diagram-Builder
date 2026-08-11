@@ -1,7 +1,10 @@
 import { useRef } from 'react'
 
-const MIN_W = 48
-const MIN_H = 28
+// Exported so EditorTopbar's own Width/Height number inputs (Format tab,
+// Size group) clamp to the exact same floor a drag-resize already does -
+// one shared source, not two magic numbers that happen to match today.
+export const MIN_W = 48
+export const MIN_H = 28
 
 // key: which edges/corner this handle owns. baseAngle: clockwise degrees
 // from "up", same convention as shape.rotation - used to keep the resize

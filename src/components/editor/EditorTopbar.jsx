@@ -4,6 +4,7 @@ import { usePopoverState } from '../../lib/usePopoverState'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { MIN_ZOOM, MAX_ZOOM } from './useDiagramEditor'
 import { ZOOM_STEP } from './EditorCanvas'
+import { MIN_W as MIN_SHAPE_WIDTH, MIN_H as MIN_SHAPE_HEIGHT } from './ShapeHandles'
 import {
   FONT_OPTIONS,
   DEFAULT_FONT_ID,
@@ -626,6 +627,40 @@ function EditorTopbar({ canvasNodeRef }) {
   const updateCornerRadius = (radius) => {
     if (!selectedShape) return
     dispatch({ type: 'SET_SHAPE_CORNER_RADIUS', id: selectedShape.id, radius })
+  }
+
+  // Width/Height - typed exact values alongside the existing drag-to-resize
+  // handles (ShapeHandles.jsx), not a replacement for them. erdTable is
+  // excluded: its height isn't a free-form box, it's derived from its own
+  // row count (ERD_HEADER_HEIGHT + rows.length * ERD_ROW_HEIGHT, see
+  // Shape.jsx's ErdTableBody) - typing an arbitrary height here would just
+  // fight that on the next row add/remove.
+  const showSizeControl = Boolean(selectedShape) && selectedShape.type !== 'erdTable'
+  // RESIZE_SHAPE is a CONTINUOUS_TYPES entry (historyReducer.js) - a drag
+  // dispatches it many times per gesture and relies on a matching DRAG_END
+  // to close it back out into one undo step. This is a single one-shot
+  // commit (on blur/Enter, not a drag), but still has to pair its own
+  // dispatch with a DRAG_END right after for the exact same reason the
+  // corner radius slider's onPointerUp/onKeyUp/onBlur do - otherwise
+  // isDragging gets stuck true and silently breaks every undo checkpoint
+  // after it (see historyReducer.js's own comment on this failure mode).
+  const commitSize = (field, rawValue) => {
+    if (!selectedShape) return
+    const parsed = Math.round(Number(rawValue))
+    if (!Number.isFinite(parsed)) return
+    const min = field === 'width' ? MIN_SHAPE_WIDTH : MIN_SHAPE_HEIGHT
+    const clamped = Math.max(min, parsed)
+    const current = field === 'width' ? selectedShape.width : selectedShape.height
+    if (clamped === current) return
+    dispatch({
+      type: 'RESIZE_SHAPE',
+      id: selectedShape.id,
+      x: selectedShape.x,
+      y: selectedShape.y,
+      width: field === 'width' ? clamped : selectedShape.width,
+      height: field === 'height' ? clamped : selectedShape.height,
+    })
+    dispatch({ type: 'DRAG_END' })
   }
 
   // One Fill control, shared by shapes and arrows rather than two separate
@@ -1369,6 +1404,51 @@ function EditorTopbar({ canvasNodeRef }) {
                 </div>,
                 document.body,
               )}
+
+            {showSizeControl && (
+              <>
+                {divider}
+
+                <FormatGroup label="Size">
+                  <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+                    <label className="flex h-8 shrink-0 items-center gap-1 pl-1.5 pr-1 text-[10px] font-semibold uppercase text-soft">
+                      W
+                      <input
+                        key={`w-${selectedShape.id}`}
+                        type="number"
+                        min={MIN_SHAPE_WIDTH}
+                        step={1}
+                        defaultValue={Math.round(selectedShape.width)}
+                        onBlur={(event) => commitSize('width', event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') event.currentTarget.blur()
+                        }}
+                        title="Width"
+                        aria-label="Width"
+                        className="w-11 shrink-0 bg-white text-[12.5px] font-medium normal-case text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                    </label>
+                    <label className="flex h-8 shrink-0 items-center gap-1 border-l border-line pl-1.5 pr-1 text-[10px] font-semibold uppercase text-soft">
+                      H
+                      <input
+                        key={`h-${selectedShape.id}`}
+                        type="number"
+                        min={MIN_SHAPE_HEIGHT}
+                        step={1}
+                        defaultValue={Math.round(selectedShape.height)}
+                        onBlur={(event) => commitSize('height', event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') event.currentTarget.blur()
+                        }}
+                        title="Height"
+                        aria-label="Height"
+                        className="w-11 shrink-0 bg-white text-[12.5px] font-medium normal-case text-ink outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                    </label>
+                  </div>
+                </FormatGroup>
+              </>
+            )}
 
             {/* Arrow-only: connector geometry (straight/curved/orthogonal/
                 ERD) and which end(s) show a triangle head - both previously

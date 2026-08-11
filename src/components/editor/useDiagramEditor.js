@@ -628,13 +628,13 @@ function reducer(state, action) {
       }
     }
 
-    // labelOffsetX/Y are relative to whichever anchor is currently in effect
-    // - the arrow's live-recomputed labelAnchor by default, or a frozen
-    // labelLockX/Y snapshot once TOGGLE_ARROW_LABEL_LOCK below has locked it
-    // - so a manually-dragged label stays put *relative to that anchor*
-    // whether the arrow's route later changes (shapes moved, endpoint
-    // reconnected, etc.) or not. Same reducer logic either way; only which
-    // anchor ArrowLabels.jsx reads at render time differs.
+    // labelOffsetX/Y are relative to the arrow's live-recomputed labelAnchor
+    // (not an absolute position), so a manually-dragged label stays with the
+    // arrow - glides right along as it moves/reroutes (shapes moved,
+    // endpoint reconnected, etc.) instead of visually detaching from it.
+    // This is unaffected by labelLocked (see TOGGLE_ARROW_LABEL_LOCK below) -
+    // ArrowLabels.jsx itself refuses to start a drag gesture while locked,
+    // so this case just never fires for a locked label in practice.
     case 'MOVE_ARROW_LABEL': {
       const arrow = state.arrows[action.id]
       if (!arrow) return state
@@ -650,40 +650,19 @@ function reducer(state, action) {
       }
     }
 
-    // Freezes (or releases) the anchor labelOffsetX/Y is measured from - see
-    // that field's own comment above. action.anchorX/Y is the *live* anchor
-    // ArrowLabels.jsx already computed for this render, passed in rather
-    // than recomputed here (computeArrowRoute needs the connected shapes,
-    // and the reducer has no reason to duplicate that), so both directions
-    // of this toggle land exactly on the label's current on-screen position -
-    // never a jump at the instant it's (un)locked, only afterward does
-    // locked mean "stays here regardless of what the arrow does."
+    // Locks the label's *offset* in place (stops it being dragged to a new
+    // spot), not its position - it still tracks the arrow's live anchor +
+    // that now-frozen offset every render exactly like an unlocked label
+    // does (see MOVE_ARROW_LABEL above), so it keeps gliding smoothly along
+    // with the arrow as it moves/reroutes instead of getting left behind.
+    // ArrowLabels.jsx enforces the "can't drag while locked" half of this;
+    // the reducer's own part is just this one boolean flip.
     case 'TOGGLE_ARROW_LABEL_LOCK': {
       const arrow = state.arrows[action.id]
       if (!arrow) return state
-      if (arrow.labelLockX != null) {
-        const absX = arrow.labelLockX + (arrow.labelOffsetX ?? 0)
-        const absY = arrow.labelLockY + (arrow.labelOffsetY ?? 0)
-        return {
-          ...state,
-          arrows: {
-            ...state.arrows,
-            [action.id]: {
-              ...arrow,
-              labelLockX: null,
-              labelLockY: null,
-              labelOffsetX: absX - action.anchorX,
-              labelOffsetY: absY - action.anchorY,
-            },
-          },
-        }
-      }
       return {
         ...state,
-        arrows: {
-          ...state.arrows,
-          [action.id]: { ...arrow, labelLockX: action.anchorX, labelLockY: action.anchorY },
-        },
+        arrows: { ...state.arrows, [action.id]: { ...arrow, labelLocked: !arrow.labelLocked } },
       }
     }
 

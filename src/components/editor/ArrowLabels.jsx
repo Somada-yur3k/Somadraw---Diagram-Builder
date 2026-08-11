@@ -22,16 +22,17 @@ const ArrowLabel = memo(function ArrowLabel({
   const rotateRef = useRef(null)
   const labelRef = useRef(null)
 
-  // Locked (labelLockX/Y set - see TOGGLE_ARROW_LABEL_LOCK in
-  // useDiagramEditor.js): anchor to that frozen point instead of the live
-  // labelAnchor computeArrowRoute just recomputed from the connected
-  // shapes' current positions/sides, so moving, resizing, or rerouting
-  // either end no longer drags the label along with it.
-  const isLocked = arrow.labelLockX != null
-  const anchorX = isLocked ? arrow.labelLockX : labelAnchorX
-  const anchorY = isLocked ? arrow.labelLockY : labelAnchorY
-  const x = anchorX + (arrow.labelOffsetX ?? 0)
-  const y = anchorY + (arrow.labelOffsetY ?? 0)
+  // Position is always the live labelAnchor computeArrowRoute just
+  // recomputed from the connected shapes' current positions/sides, plus the
+  // manual offset - locked (labelLocked, see TOGGLE_ARROW_LABEL_LOCK in
+  // useDiagramEditor.js) or not. Locking only stops the offset itself from
+  // being *changed* (handlePointerDown below refuses to start a drag while
+  // locked) - the label still glides right along with the arrow as it
+  // moves/reroutes either way, it just can't be manually repositioned
+  // relative to it anymore.
+  const isLocked = Boolean(arrow.labelLocked)
+  const x = labelAnchorX + (arrow.labelOffsetX ?? 0)
+  const y = labelAnchorY + (arrow.labelOffsetY ?? 0)
   const rotation = arrow.labelRotation ?? 0
   // The arrow's own line color at full strength (same fallback ArrowLayer.jsx
   // uses for the line itself when no color has been picked), not a tint of
@@ -45,6 +46,10 @@ const ArrowLabel = memo(function ArrowLabel({
     if (event.target.closest('[data-no-drag]')) return
     event.stopPropagation()
     dispatch({ type: 'SELECT', kind: 'arrow', id: arrow.id })
+    // Selecting still works while locked (above) - only the drag gesture
+    // itself is refused, by never capturing the pointer or arming dragRef,
+    // so handlePointerMove below has nothing to act on.
+    if (isLocked) return
     event.currentTarget.setPointerCapture(event.pointerId)
     dragRef.current = {
       pointerId: event.pointerId,
@@ -109,7 +114,7 @@ const ArrowLabel = memo(function ArrowLabel({
 
   return (
     <div
-      className="absolute z-20 select-none cursor-grab active:cursor-grabbing"
+      className={`absolute z-20 select-none ${isLocked ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
       style={{ left: x, top: y }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -184,11 +189,7 @@ const ArrowLabel = memo(function ArrowLabel({
             data-no-drag
             onClick={(event) => {
               event.stopPropagation()
-              // anchorX/Y (already computed above from whichever anchor is
-              // currently in effect) is exactly what TOGGLE_ARROW_LABEL_LOCK
-              // needs to (un)freeze against without a visual jump - see its
-              // own comment in useDiagramEditor.js.
-              dispatch({ type: 'TOGGLE_ARROW_LABEL_LOCK', id: arrow.id, anchorX, anchorY })
+              dispatch({ type: 'TOGGLE_ARROW_LABEL_LOCK', id: arrow.id })
             }}
             title={isLocked ? 'Unlock label position' : 'Lock label position'}
             className={`absolute -left-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full border bg-white shadow-sm ${
