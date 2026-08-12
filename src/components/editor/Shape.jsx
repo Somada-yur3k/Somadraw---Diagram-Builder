@@ -100,27 +100,20 @@ function SwimlaneBody({ shape, orientation, laneCount, commitField, disableDblCl
   )
 }
 
-// A row's own key marker icon - shown both as the trigger for
-// ErdRowKeyControl's picker menu below and as each option's own icon inside
-// that menu. Renders a small placeholder dot rather than nothing when
-// unset, so every row's icon slot occupies the same width regardless of key
-// state - names/types across rows stay column-aligned instead of jumping
-// left/right as a row gains or loses a key.
+// A row's own key marker - shown both as the trigger for ErdRowKeyControl's
+// picker menu below and as each option's own marker inside that menu. Plain
+// "PK"/"FK" text (the actual SQL/ERD shorthand) rather than a key/link
+// glyph - reads unambiguously at this size instead of needing the hover
+// title to say which is which. Renders a small placeholder dot rather than
+// nothing when unset, so every row's marker slot occupies the same width
+// regardless of key state - names/types across rows stay column-aligned
+// instead of jumping left/right as a row gains or loses a key.
 function ErdKeyIcon({ type }) {
   if (type === 'pk') {
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400">
-        <circle cx="8" cy="15" r="4" />
-        <path d="m10.5 12.5 8-8M16 5l2 2M13 8l2 2" />
-      </svg>
-    )
+    return <span className="block shrink-0 text-[10px] font-bold leading-none text-amber-500">PK</span>
   }
   if (type === 'fk') {
-    return (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-sky-400">
-        <path d="M9 15a4 4 0 0 0 4 4h2a4 4 0 0 0 0-8h-1M15 9a4 4 0 0 0-4-4H9a4 4 0 0 0 0 8h1" />
-      </svg>
-    )
+    return <span className="block shrink-0 text-[10px] font-bold leading-none text-sky-500">FK</span>
   }
   return <span className="block h-1.5 w-1.5 shrink-0 rounded-full bg-line" />
 }

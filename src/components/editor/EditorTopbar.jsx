@@ -177,6 +177,18 @@ function LineStyleIcon() {
   )
 }
 
+// A filled pill when the label background is on, the same pill hollow with
+// a strike-through when it's off - mirrors the lock icon's own two-state
+// (open/closed shackle) treatment in ArrowLabels.jsx.
+function LabelBackgroundIcon({ on }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <rect x="3" y="7" width="18" height="10" rx="2.5" fill={on ? 'currentColor' : 'none'} fillOpacity={on ? 0.2 : undefined} />
+      {!on && <line x1="4" y1="18" x2="20" y2="6" />}
+    </svg>
+  )
+}
+
 // Same three glyphs EditorSidebar.jsx's own ConnectorTypeIcon draws for its
 // Draw Arrow dropdown (kept as a separate local copy, this file's own
 // convention - see Group/Ungroup's comment below) - 'shape' and 'erd' share
@@ -688,6 +700,15 @@ function EditorTopbar({ canvasNodeRef }) {
   const lineStyleTriggerRef = useRef(null)
   const lineStylePanelRef = useRef(null)
   const lineStylePopover = usePopoverState(lineStyleTriggerRef, lineStylePanelRef)
+
+  // Arrow-label-only (a shape has no separate "label" of its own to fill) -
+  // whether the label renders on its usual colored pill (the Fill swatch
+  // above's color) or as bare text with no background at all.
+  const currentLabelBackground = selectedArrow?.labelBackground ?? true
+  const toggleLabelBackground = () => {
+    if (!selectedArrow) return
+    dispatch({ type: 'TOGGLE_ARROW_LABEL_BACKGROUND', id: selectedArrow.id })
+  }
 
   // Arrow-only (a shape has no equivalent concept of "connector type" or
   // "which end has a head") - geometry and heads are two separate controls
@@ -1292,6 +1313,23 @@ function EditorTopbar({ canvasNodeRef }) {
                   className="h-6 w-6 shrink-0 cursor-pointer rounded p-0.5"
                 />
               </span>
+
+              {/* Arrow-only - see currentLabelBackground/toggleLabelBackground's
+                  own comment above. */}
+              {Boolean(selectedArrow) && (
+                <button
+                  type="button"
+                  onClick={toggleLabelBackground}
+                  aria-pressed={currentLabelBackground}
+                  title={currentLabelBackground ? 'Hide label background' : 'Show label background'}
+                  aria-label="Toggle label background"
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
+                    currentLabelBackground ? 'bg-surface-soft text-ink' : 'text-body'
+                  }`}
+                >
+                  <LabelBackgroundIcon on={currentLabelBackground} />
+                </button>
+              )}
 
               {showLineStyleControl && (
                 <button

@@ -823,6 +823,23 @@ function reducer(state, action) {
       }
     }
 
+    // Whether the arrow's label renders on its usual filled pill (the
+    // arrow's own color, see ArrowLabels.jsx's labelBg) or as bare text with
+    // no background at all. Defaults true (background shown) when unset, so
+    // every arrow saved before this field existed keeps looking exactly as
+    // it already did.
+    case 'TOGGLE_ARROW_LABEL_BACKGROUND': {
+      const arrow = state.arrows[action.id]
+      if (!arrow) return state
+      return {
+        ...state,
+        arrows: {
+          ...state.arrows,
+          [action.id]: { ...arrow, labelBackground: !(arrow.labelBackground ?? true) },
+        },
+      }
+    }
+
     // Changes an *existing* arrow's geometry - distinct from
     // SET_ARROW_CONNECTOR_TYPE (top of this file), which only sets what
     // geometry the *next newly-drawn* arrow starts with. Until now the only
