@@ -1,7 +1,25 @@
+import { SystemArchIcon } from './systemArchIcons'
+import { NetworkIcon } from './networkIcons'
+import { systemArchOwnShapeKeys, networkOwnShapeKeys } from './shapeCatalog'
+
 // Small mini-swatch representing a shape type - shared by EditorSidebar's
 // tool buttons and FloatingShapePreview's drag ghost, so both ever show the
 // exact same icon for a given tool key.
 function ShapeIcon({ toolKey }) {
+  // System Architecture's and Network Diagram's shapes each cover far too
+  // many distinct real-world concepts (browser, firewall, cache, gear...)
+  // to each reduce to one of this file's usual colored-CSS-primitive
+  // swatches the way a circle/square/diamond can - an actual line-icon
+  // glyph (systemArchIcons.jsx/networkIcons.jsx, shared with the canvas
+  // node itself) reads far better here, same reasoning the plain "T"
+  // fallback below already breaks from the colored-box convention for the
+  // text label tool.
+  if (systemArchOwnShapeKeys.has(toolKey)) {
+    return <SystemArchIcon type={toolKey} size={16} className="shrink-0 text-body" />
+  }
+  if (networkOwnShapeKeys.has(toolKey)) {
+    return <NetworkIcon type={toolKey} size={16} className="shrink-0 text-body" />
+  }
   if (toolKey === 'entity') {
     return <span className="h-3.5 w-5 shrink-0 rounded border-2 border-brand-blue/60 bg-brand-blue/10" />
   }

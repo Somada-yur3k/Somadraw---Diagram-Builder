@@ -1,36 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import somadrawLogo from '../assets/SomadrawLogo.png'
 import { supabase } from '../lib/supabaseClient'
-import { usePopoverState } from '../lib/usePopoverState'
 import { createBlankDiagramData } from './editor/useDiagramEditor'
-import { OWNER_EMAIL } from '../lib/ownerEmail'
 import { getDisplayUser } from '../lib/userDisplay'
-
-const SETTINGS_PANEL_WIDTH = 224
-const SETTINGS_PANEL_MARGIN = 16
-
-// The Settings button sits at the bottom-left of the screen (desktop
-// sidebar footer, or the mobile drawer), where the shared hook's default
-// "centered below the trigger" placement would frequently run the panel
-// off the bottom or left edge of the viewport. Opening to the trigger's
-// right and growing upward from its bottom edge (rather than down from its
-// top) keeps the panel on-screen regardless of sidebar width (collapsed,
-// expanded, or the mobile drawer) or viewport height - the horizontal
-// clamp additionally protects the mobile drawer case, where the trigger's
-// own right edge can sit close to (or past, on very narrow phones) the
-// panel's required width.
-function computeSettingsPos(rect) {
-  const left = Math.min(
-    rect.right + 8,
-    window.innerWidth - SETTINGS_PANEL_WIDTH - SETTINGS_PANEL_MARGIN,
-  )
-  return {
-    left: Math.max(SETTINGS_PANEL_MARGIN, left),
-    bottom: window.innerHeight - rect.bottom,
-  }
-}
+import SettingsModal from './SettingsModal'
 
 function Logo() {
   return (
@@ -117,31 +91,6 @@ function SettingsIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
-    </svg>
-  )
-}
-
-function AccountIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
-    </svg>
-  )
-}
-
-function MonitorIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-    </svg>
-  )
-}
-
-function DeveloperIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <path d="m8 6-5 6 5 6M16 6l5 6-5 6" />
     </svg>
   )
 }
@@ -303,7 +252,7 @@ function SignOutConfirmDialog({ user, onCancel, onConfirm }) {
               className="h-9 w-9 shrink-0 rounded-full object-cover"
             />
           ) : (
-            <span className="gradient-bg flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-blue text-[12px] font-semibold text-white">
               {name[0]?.toUpperCase()}
             </span>
           )}
@@ -317,20 +266,20 @@ function SignOutConfirmDialog({ user, onCancel, onConfirm }) {
         <p className="mt-1 text-[12px] leading-relaxed text-soft">
           You'll need to sign in again to get back to your diagrams.
         </p>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-line px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-soft"
-          >
-            Cancel
-          </button>
+        <div className="mt-4 flex flex-col gap-2">
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-lg bg-rose-600 px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-rose-700"
+            className="w-full rounded-lg bg-ink px-3 py-2 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
           >
             Sign out
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full rounded-lg border border-line px-3 py-2 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-soft"
+          >
+            Cancel
           </button>
         </div>
       </div>
@@ -366,7 +315,7 @@ function DiagramListItem({ diagram, isActive, isOwner, isStarred, onOpen, onRena
             setRenaming(false)
           }
         }}
-        className="w-full rounded-lg border border-brand-purple/40 px-3 py-2 text-[13.5px] font-medium text-ink outline-none"
+        className="w-full rounded-lg border border-ink/40 px-3 py-2 text-[13.5px] font-medium text-ink outline-none"
       />
     )
   }
@@ -374,7 +323,9 @@ function DiagramListItem({ diagram, isActive, isOwner, isStarred, onOpen, onRena
   return (
     <div
       className={`group flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13.5px] transition-colors ${
-        isActive ? 'bg-surface-soft text-ink' : 'text-body hover:bg-surface-soft hover:text-ink'
+        isActive
+          ? 'bg-brand-blue/10 text-brand-blue'
+          : 'text-body hover:bg-surface-soft hover:text-ink'
       }`}
     >
       <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
@@ -405,8 +356,8 @@ function DiagramListItem({ diagram, isActive, isOwner, isStarred, onOpen, onRena
         }}
         title={isStarred ? 'Unstar' : 'Star'}
         aria-label={isStarred ? 'Remove from starred' : 'Add to starred'}
-        className={`h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-white hover:text-amber-500 ${
-          isStarred ? 'flex text-amber-500' : 'hidden text-soft group-hover:flex'
+        className={`h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-white hover:text-brand-blue ${
+          isStarred ? 'flex text-brand-blue' : 'hidden text-soft group-hover:flex'
         }`}
       >
         <StarIcon filled={isStarred} />
@@ -484,11 +435,11 @@ function SidebarBody({
   onSignOut,
   onToggleCollapse,
   onCloseMobile,
+  onOpenSettings,
   user,
 }) {
   const isMobile = variant === 'mobile'
   const showLabels = isMobile || !collapsed
-  const navigate = useNavigate()
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -501,23 +452,17 @@ function SidebarBody({
   const starredDiagrams = visibleDiagrams.filter((diagram) => starredIds.has(diagram.id))
   const unstarredDiagrams = visibleDiagrams.filter((diagram) => !starredIds.has(diagram.id))
 
-  const settingsTriggerRef = useRef(null)
-  const settingsPanelRef = useRef(null)
-  const settingsPopover = usePopoverState(settingsTriggerRef, settingsPanelRef, computeSettingsPos)
-
-  const goToSettingsPage = (path) => {
-    settingsPopover.close()
-    navigate(path)
+  const handleOpenSettings = () => {
+    onOpenSettings()
     if (isMobile) onCloseMobile()
   }
 
   const itemClass = (active) =>
     `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium transition-colors ${
-      active ? 'bg-surface-soft text-ink' : 'text-body hover:bg-surface-soft hover:text-ink'
+      active
+        ? 'bg-brand-blue/10 text-brand-blue'
+        : 'text-body hover:bg-surface-soft hover:text-ink'
     } ${showLabels ? '' : 'justify-center px-0'}`
-
-  const settingsMenuItemClass =
-    'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13.5px] font-medium text-body transition-colors hover:bg-surface-soft hover:text-ink'
 
   return (
     <div className="flex h-full flex-col">
@@ -545,7 +490,7 @@ function SidebarBody({
           type="button"
           title="New diagram"
           onClick={onNewDiagram}
-          className={itemClass(false)}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium text-brand-blue transition-colors hover:bg-brand-blue/10 ${showLabels ? '' : 'justify-center px-0'}`}
         >
           <PlusIcon />
           {showLabels && <span>New diagram</span>}
@@ -554,7 +499,7 @@ function SidebarBody({
 
       {showLabels && (
         <div className="mt-2 px-2">
-          <div className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 text-soft focus-within:border-brand-purple/40">
+          <div className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 text-soft focus-within:border-ink/40">
             <SearchIcon />
             <input
               type="text"
@@ -614,67 +559,19 @@ function SidebarBody({
       {!showLabels && <div className="flex-1" />}
 
       <div className="border-t border-line p-2">
+        {/* Opens SettingsModal directly (owned by the outer DashboardSidebar
+            below, see onOpenSettings) - no longer a popover menu picking
+            between separate Account Info/Developer pages, since those are
+            both just tabs inside that one modal now. */}
         <button
-          ref={settingsTriggerRef}
           type="button"
           title={showLabels ? undefined : 'Settings'}
-          onClick={settingsPopover.toggle}
-          aria-haspopup="true"
-          aria-expanded={settingsPopover.open}
-          className={itemClass(settingsPopover.open)}
+          onClick={handleOpenSettings}
+          className={itemClass(false)}
         >
           <SettingsIcon />
           {showLabels && <span>Settings</span>}
         </button>
-
-        {settingsPopover.open &&
-          settingsPopover.pos &&
-          createPortal(
-            <div
-              ref={settingsPanelRef}
-              className="fixed z-60 w-56 rounded-2xl border border-line bg-white p-1.5 shadow-lg"
-              style={settingsPopover.pos}
-            >
-              <button
-                type="button"
-                onClick={() => goToSettingsPage('/workspace/settings')}
-                className={settingsMenuItemClass}
-              >
-                <AccountIcon />
-                <span>Account Info</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => goToSettingsPage('/workspace/developer')}
-                className={settingsMenuItemClass}
-              >
-                <DeveloperIcon />
-                <span>Developer</span>
-              </button>
-              {user?.email === OWNER_EMAIL && (
-                // A real cross-page link (not goToSettingsPage's client-side
-                // navigate) - /monitor is its own standalone page/bundle
-                // (monitor.html), not a route inside this app's own
-                // <Routes>, so getting there needs an actual page load.
-                // New tab so leaving it open doesn't lose whatever diagram
-                // was open here.
-                <a
-                  href="/monitor"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => {
-                    settingsPopover.close()
-                    if (isMobile) onCloseMobile()
-                  }}
-                  className={settingsMenuItemClass}
-                >
-                  <MonitorIcon />
-                  <span>Monitor Users</span>
-                </a>
-              )}
-            </div>,
-            document.body,
-          )}
 
         <button
           type="button"
@@ -704,12 +601,14 @@ function SidebarBody({
 function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobileOpen, onCloseMobile }) {
   const [diagrams, setDiagrams] = useState([])
   const [starredIds, setStarredIds] = useState(() => new Set())
+  // Settings is a floating modal now (SettingsModal), not a page - no more
+  // /workspace/settings or /workspace/developer route to exclude here, this
+  // pattern always was (and only ever needs to be) an actual diagram id.
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
-  const isSettingsActive =
-    location.pathname === '/workspace/settings' || location.pathname === '/workspace/developer'
-  const diagramIdMatch = !isSettingsActive && location.pathname.match(/^\/workspace\/([^/]+)$/)
+  const diagramIdMatch = location.pathname.match(/^\/workspace\/([^/]+)$/)
   const activeDiagramId = diagramIdMatch ? diagramIdMatch[1] : null
 
   function fetchDiagrams() {
@@ -830,6 +729,7 @@ function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobile
     onDeleteDiagram: handleDeleteDiagram,
     onLeaveDiagram: handleLeaveDiagram,
     onToggleStar: handleToggleStar,
+    onOpenSettings: () => setSettingsOpen(true),
     onSignOut,
     user,
   }
@@ -870,6 +770,8 @@ function DashboardSidebar({ user, onSignOut, collapsed, onToggleCollapse, mobile
           </div>
         </div>
       )}
+
+      {settingsOpen && <SettingsModal user={user} onClose={() => setSettingsOpen(false)} />}
     </>
   )
 }

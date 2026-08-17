@@ -1,13 +1,37 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import somadrawLogo from '../assets/SomadrawLogo.png'
+import ResourcesMenu from './ResourcesMenu'
 
 const links = [
   { href: '#features', label: 'Features' },
   { href: '#how-it-works', label: 'How it works' },
 ]
 
-function Navbar({ onSignIn, isSigningIn }) {
+function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [activeHref, setActiveHref] = useState(null)
+
+  // Tracks whichever of the two sections is currently under a thin band
+  // near the top of the viewport (just below the sticky navbar), so the
+  // matching nav link turns blue whether the user got there by clicking it
+  // or by scrolling past it manually - not just at the instant of a click.
+  useEffect(() => {
+    const sections = links
+      .map((link) => document.querySelector(link.href))
+      .filter(Boolean)
+    if (sections.length === 0) return undefined
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.find((entry) => entry.isIntersecting)
+        if (visible) setActiveHref(`#${visible.target.id}`)
+      },
+      { rootMargin: '-96px 0px -70% 0px' },
+    )
+    sections.forEach((section) => observer.observe(section))
+    return () => observer.disconnect()
+  }, [])
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-white/80 backdrop-blur-md">
@@ -24,22 +48,24 @@ function Navbar({ onSignIn, isSigningIn }) {
             <a
               key={link.href}
               href={link.href}
-              className="text-[14.5px] font-medium text-body transition-colors hover:text-ink"
+              onClick={() => setActiveHref(link.href)}
+              className={`text-[14.5px] font-medium transition-colors ${
+                activeHref === link.href ? 'text-brand-blue' : 'text-body hover:text-ink'
+              }`}
             >
               {link.label}
             </a>
           ))}
+          <ResourcesMenu />
         </nav>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onSignIn()}
-            disabled={isSigningIn}
-            className="rounded-full border border-line px-3.5 py-2 text-[13.5px] font-medium text-ink shadow-sm transition-all hover:border-ink/20 hover:shadow-md disabled:opacity-60 sm:px-4 sm:text-[14.5px]"
+          <Link
+            to="/sign-in"
+            className="rounded-full border border-line px-3.5 py-2 text-[13.5px] font-medium text-ink shadow-sm transition-all hover:border-ink/20 hover:shadow-md sm:px-4 sm:text-[14.5px]"
           >
-            {isSigningIn ? 'Signing in…' : 'Sign in'}
-          </button>
+            Sign in
+          </Link>
 
           <button
             type="button"
@@ -82,6 +108,15 @@ function Navbar({ onSignIn, isSigningIn }) {
                 </a>
               </li>
             ))}
+            <li>
+              <Link
+                to="/docs"
+                onClick={() => setMenuOpen(false)}
+                className="block rounded-lg px-2 py-2.5 text-[15px] font-medium text-body transition-colors hover:bg-surface-soft hover:text-ink"
+              >
+                Documentation
+              </Link>
+            </li>
           </ul>
         </nav>
       )}

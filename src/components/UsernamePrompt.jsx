@@ -10,7 +10,7 @@ const MAX_LENGTH = 24
 // comment on the priority chain this feeds). Same modal shell as
 // DashboardSidebar.jsx's DeleteDiagramDialog/SignOutConfirmDialog (fixed
 // backdrop, click-outside + Escape both dismiss), same controlled-input +
-// status-driven save flow as DeveloperInfoView.jsx's FeedbackForm.
+// status-driven save flow as SettingsModal.jsx's FeedbackSection.
 function UsernamePrompt({ onDone }) {
   const [value, setValue] = useState('')
   const [status, setStatus] = useState('idle') // idle | saving | error
@@ -39,7 +39,7 @@ function UsernamePrompt({ onDone }) {
     setStatus('saving')
     const { error } = await supabase.auth.updateUser({ data: { username: trimmed } })
     if (error) {
-      // Same reasoning as SettingsView.jsx's own save handler - the
+      // Same reasoning as SettingsModal.jsx's own save handler - the
       // on-screen message stays generic, this is what actually says why.
       console.error('Failed to save username:', error)
       setStatus('error')
@@ -91,7 +91,7 @@ function UsernamePrompt({ onDone }) {
           <button
             type="submit"
             disabled={!value.trim() || status === 'saving'}
-            className="gradient-bg rounded-lg px-3.5 py-1.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-50"
+            className="rounded-lg bg-brand-blue px-3.5 py-1.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {status === 'saving' ? 'Saving…' : 'Save'}
           </button>

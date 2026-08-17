@@ -8,7 +8,7 @@ function OrbitArrow() {
       viewBox="0 0 24 24"
       className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 drop-shadow-sm"
     >
-      <path d="M12 2 17 11 12 8.5 7 11Z" className="fill-brand-purple" />
+      <path d="M12 2 17 11 12 8.5 7 11Z" className="fill-ink" />
     </svg>
   )
 }

@@ -1,42 +1,21 @@
-// Real DFD notation, not generic chips - deliberately reuses the exact
-// class strings the editor's own Shape.jsx uses for entity/process/store
-// (see ShapeBody there) so this Hero mockup reads as an honest preview of
-// what a diagram actually looks like, not a stand-in illustration.
-function EntityNode({ children, floatClassName }) {
-  return (
-    <div className={`flex h-10 w-24 items-center justify-center rounded-lg border-2 border-brand-blue/50 bg-brand-blue/6 shadow-sm ${floatClassName}`}>
-      <span className="px-1.5 text-center text-[10.5px] font-semibold uppercase tracking-wide text-ink">
-        {children}
-      </span>
-    </div>
-  )
-}
+import { ShapeBody } from './editor/Shape'
 
-function ProcessNode({ badge, children, floatClassName }) {
-  return (
-    <div className={`flex h-[52px] w-28 flex-col overflow-hidden rounded-xl border-2 border-brand-purple shadow-sm ${floatClassName}`}>
-      <div className="flex shrink-0 items-center gap-1.5 bg-brand-purple px-2 py-1">
-        <span className="text-[11px] font-extrabold leading-none text-white">{badge}</span>
-        <span className="text-[9px] font-bold uppercase tracking-wide leading-none text-white">
-          Process
-        </span>
-      </div>
-      <div className="flex flex-1 items-center justify-center bg-brand-purple/6 px-2">
-        <span className="text-center text-[11px] font-medium leading-snug text-ink">
-          {children}
-        </span>
-      </div>
-    </div>
-  )
-}
+// Mock shapes are display-only - disableDblClick below blocks the one path
+// (EditableText's own double-click-to-edit handler) that could ever call
+// this, so it never actually needs to do anything.
+function noop() {}
 
-function StoreNode({ badge, children, floatClassName }) {
+// Real DFD notation, not generic chips - actual shapes rendered through the
+// editor's own ShapeBody (Shape.jsx), not a hand-copied lookalike. A
+// lookalike is exactly what silently drifted out of sync with the real
+// thing before this (Data Store's whole layout changed there without a
+// hand-copied version anywhere else ever being told) - rendering the real
+// component instead means it can't happen again, and any future style
+// change to a shape shows up here automatically.
+function MockShape({ shape, width, height, floatClassName }) {
   return (
-    <div className={`flex h-9 w-28 items-center gap-1.5 border-y-2 border-brand-pink/50 bg-brand-pink/6 px-2 shadow-sm ${floatClassName}`}>
-      <span className="shrink-0 text-[10px] font-bold text-brand-pink">{badge}</span>
-      <span className="min-w-0 flex-1 truncate text-[11px] font-medium leading-snug text-ink">
-        {children}
-      </span>
+    <div className={`shadow-sm ${floatClassName}`} style={{ width, height }}>
+      <ShapeBody shape={shape} dispatch={noop} disableDblClick dragHandlers={{}} zoom={1} />
     </div>
   )
 }
@@ -67,7 +46,7 @@ function DfdMockup() {
         </div>
 
         <div
-          className="relative h-75 bg-canvas sm:h-85"
+          className="relative h-75 bg-canvas sm:h-85 lg:h-96"
           style={{
             backgroundImage:
               'radial-gradient(circle, #e8e7f1 1px, transparent 1px)',
@@ -111,22 +90,36 @@ function DfdMockup() {
           </svg>
 
           <NodeAnchor className="left-[16%] top-[20%]">
-            <EntityNode floatClassName="animate-float-a">Customer</EntityNode>
+            <MockShape
+              shape={{ id: 'mock-customer', type: 'entity', text: 'Customer' }}
+              width={96}
+              height={40}
+              floatClassName="animate-float-a"
+            />
           </NodeAnchor>
           <NodeAnchor className="left-[74%] top-[20%]">
-            <StoreNode badge="D1" floatClassName="animate-float-c">
-              Orders DB
-            </StoreNode>
+            <MockShape
+              shape={{ id: 'mock-store', type: 'store', text: 'Orders DB', badge: 'D1' }}
+              width={132}
+              height={44}
+              floatClassName="animate-float-c"
+            />
           </NodeAnchor>
           <NodeAnchor className="left-[42%] top-[50%]">
-            <ProcessNode badge="1" floatClassName="animate-float-b">
-              Validate Order
-            </ProcessNode>
+            <MockShape
+              shape={{ id: 'mock-process-1', type: 'process', text: 'Validate Order', badge: '1' }}
+              width={124}
+              height={74}
+              floatClassName="animate-float-b"
+            />
           </NodeAnchor>
           <NodeAnchor className="left-[16%] top-[78%]">
-            <ProcessNode badge="2" floatClassName="animate-float-d">
-              Notify User
-            </ProcessNode>
+            <MockShape
+              shape={{ id: 'mock-process-2', type: 'process', text: 'Notify User', badge: '2' }}
+              width={124}
+              height={74}
+              floatClassName="animate-float-d"
+            />
           </NodeAnchor>
         </div>
       </div>

@@ -156,7 +156,7 @@ const ArrowPathVisual = memo(function ArrowPathVisual({ arrow, d, isSelected, di
       <path
         d={d}
         fill="none"
-        stroke={isSelected ? 'var(--color-brand-purple)' : arrow.color || 'var(--color-soft)'}
+        stroke={isSelected ? 'var(--color-brand-purple)' : arrow.color || 'var(--color-ink)'}
         strokeWidth={isSelected ? 1.6 : 1.2}
         strokeDasharray={dasharrayForLineStyle(arrow.lineStyle)}
         markerStart={startMarker ? `url(#${startMarker})` : undefined}

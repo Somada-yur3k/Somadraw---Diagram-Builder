@@ -16,7 +16,7 @@ function SidebarToggleIcon({ collapsed }) {
   )
 }
 
-function Editor({ diagramId, initialData, diagramName, role = 'owner', email, name, picture }) {
+function Editor({ diagramId, initialData, diagramName, role = 'owner', userId, email, name, picture }) {
   const {
     state,
     dispatch,
@@ -50,6 +50,7 @@ function Editor({ diagramId, initialData, diagramName, role = 'owner', email, na
         role,
         readOnly,
         isDragging,
+        userId,
         email,
         name,
         picture,

@@ -34,16 +34,13 @@ const ArrowLabel = memo(function ArrowLabel({
   const x = labelAnchorX + (arrow.labelOffsetX ?? 0)
   const y = labelAnchorY + (arrow.labelOffsetY ?? 0)
   const rotation = arrow.labelRotation ?? 0
-  // The arrow's own line color at full strength (same fallback ArrowLayer.jsx
-  // uses for the line itself when no color has been picked), not a tint of
-  // it - changing the arrow's color (SET_ARROW_COLOR, the Style group's Fill
-  // swatch in EditorTopbar) re-renders this along with the line, so the two
-  // always stay in sync automatically - no separate field to keep in sync
-  // by hand. Only actually used when labelBackground is on (default, unset
+  // Flat white, independent of the arrow's own color - readable against any
+  // line color without needing to compute a contrasting text color per
+  // arrow. Only actually used when labelBackground is on (default, unset
   // means on - see TOGGLE_ARROW_LABEL_BACKGROUND in useDiagramEditor.js);
   // off renders as bare text with no fill at all.
   const showLabelBackground = arrow.labelBackground ?? true
-  const labelBg = showLabelBackground ? arrow.color || 'var(--color-soft)' : 'transparent'
+  const labelBg = showLabelBackground ? '#ffffff' : 'transparent'
 
   const handlePointerDown = (event) => {
     if (event.target.closest('[data-no-drag]')) return
@@ -138,15 +135,13 @@ const ArrowLabel = memo(function ArrowLabel({
           // while a single-line label with no "\n" in it still renders
           // exactly as before (no width constraint here to force wrapping).
           // No border/outline - just the pill itself (background is
-          // labelBg, the arrow's own color, set via style below since it's
-          // computed, not expressible as a static Tailwind class). White
-          // text reads fine against that colored pill, but would all but
-          // disappear on the plain canvas once the background's off (see
-          // showLabelBackground above) - falls back to dark ink text then,
-          // same as this app's every other unfilled/plain-text label.
-          // Shadow only makes sense with something to actually cast it too.
-          className={`block whitespace-pre-wrap rounded-md px-1 py-px text-center text-[11px] font-medium ${
-            showLabelBackground ? 'text-white shadow-sm' : 'text-ink'
+          // labelBg, flat white, set via style below since it's computed,
+          // not expressible as a static Tailwind class). Text stays ink
+          // either way now (white bg or none), so unlike labelBg this one
+          // doesn't need to branch on showLabelBackground - only the shadow
+          // does, since it only makes sense with something to cast it.
+          className={`block whitespace-pre-wrap rounded-md px-1 py-px text-center text-[11px] font-medium text-ink ${
+            showLabelBackground ? 'shadow-sm' : ''
           }`}
           // Opacity lives on the label pill itself (not the outer wrapper
           // this sits inside) so it fades the label's own border/background/

@@ -4,7 +4,16 @@ import EditableText from './EditableText'
 import ShapeHandles from './ShapeHandles'
 import { textFormatStyle } from './textFormat'
 import { DEFAULT_CORNER_RADIUS_BY_TYPE } from './shapeStyle'
-import { containerShapeTypes } from './shapeCatalog'
+import {
+  containerShapeTypes,
+  systemArchOwnShapeKeys,
+  systemArchNoBorderKeys,
+  networkOwnShapeKeys,
+  networkNoBorderKeys,
+  PLACEABLE_SHAPE_LABEL_BY_KEY,
+} from './shapeCatalog'
+import { SystemArchIcon } from './systemArchIcons'
+import { NetworkIcon } from './networkIcons'
 import { computeAlignmentSnap } from './alignmentSnap'
 import { ERD_HEADER_HEIGHT, ERD_ROW_HEIGHT } from './useDiagramEditor'
 
@@ -19,6 +28,28 @@ function DeleteButton({ onClick }) {
     >
       ×
     </button>
+  )
+}
+
+// Shown on a locked shape any time it's on screen, not only while selected
+// - a shape that silently refuses to drag with no visible reason ("why is
+// this shape stuck?") is worse than one that's visibly explained, and by
+// the time it's already selected the user has usually already tried and
+// failed to drag it once. data-export-hidden (same flag CursorMarker/
+// ArrowCardinalityPickers use) keeps it out of PNG/PDF exports - it's
+// editing chrome, not diagram content.
+function LockBadge() {
+  return (
+    <span
+      data-export-hidden
+      title="Locked"
+      className="pointer-events-none absolute -left-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border border-line bg-white text-soft shadow-sm"
+    >
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="11" width="16" height="9" rx="1.5" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </svg>
+    </span>
   )
 }
 
@@ -45,7 +76,7 @@ function DeleteButton({ onClick }) {
 // 10px thick - a title bar is a far more discoverable way to select the
 // swimlane itself (e.g. to reach the Format panel and change this very
 // color) than hunting for that thin edge.
-function SwimlaneBody({ shape, orientation, laneCount, commitField, disableDblClick, cornerStyle, fill, borderStyleValue, dragHandlers }) {
+function SwimlaneBody({ shape, orientation, laneCount, commitField, disableDblClick, cornerStyle, fill, headerFill, borderStyleValue, dragHandlers }) {
   const isVertical = orientation === 'vertical'
   const lanes = Array.from({ length: laneCount }, (_, i) => `lane${i + 1}`)
   const dividerAfter = isVertical ? 'border-r-2' : 'border-b-2'
@@ -71,7 +102,7 @@ function SwimlaneBody({ shape, orientation, laneCount, commitField, disableDblCl
             className={`pointer-events-auto flex shrink-0 cursor-move items-center justify-center overflow-hidden bg-cyan-600 ${
               isVertical ? 'w-full px-2 py-1.5' : 'h-full w-8 px-1 py-2'
             }`}
-            style={{ backgroundColor: fill || undefined }}
+            style={{ backgroundColor: headerFill }}
           >
             <EditableText
               value={shape[field]}
@@ -195,13 +226,13 @@ function ErdRowKeyControl({ value, onSelect }) {
                     setOpen(false)
                   }}
                   className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-surface-soft ${
-                    value === option.value ? 'font-medium text-ink' : 'text-soft'
+                    value === option.value ? 'font-medium text-brand-blue' : 'text-soft'
                   }`}
                 >
                   <ErdKeyIcon type={option.value} />
                   <span className="flex-1">{option.label}</span>
                   {value === option.value && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand-purple">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand-blue">
                       <path d="M20 6 9 17l-5-5" />
                     </svg>
                   )}
@@ -298,7 +329,7 @@ function ErdRowTypeControl({ value, onCommit, disableDblClick }) {
                     setOpen(false)
                   }}
                   className={`block w-full rounded-md px-2 py-1 text-left text-[12px] transition-colors hover:bg-surface-soft ${
-                    value === option ? 'font-medium text-ink' : 'text-soft'
+                    value === option ? 'font-medium text-brand-blue' : 'text-soft'
                   }`}
                 >
                   {option}
@@ -345,7 +376,7 @@ function ErdRowDragHandleIcon() {
 // the header (a fixed-height row that doesn't grow) rather than as its own
 // extra row, which would silently throw that height math off by one row
 // every time.
-function ErdTableBody({ shape, dispatch, disableDblClick, cornerStyle, fill, borderStyleValue, zoom }) {
+function ErdTableBody({ shape, dispatch, disableDblClick, cornerStyle, fill, headerFill, borderStyleValue, zoom }) {
   const commitText = (value) => dispatch({ type: 'RENAME_SHAPE', id: shape.id, field: 'text', value })
   const commitRow = (rowId, field) => (value) =>
     dispatch({ type: 'UPDATE_ERD_ROW', id: shape.id, rowId, field, value })
@@ -410,7 +441,7 @@ function ErdTableBody({ shape, dispatch, disableDblClick, cornerStyle, fill, bor
     >
       <div
         className="flex shrink-0 items-center justify-between gap-2 bg-slate-500 px-3"
-        style={{ height: ERD_HEADER_HEIGHT, backgroundColor: fill || undefined }}
+        style={{ height: ERD_HEADER_HEIGHT, backgroundColor: headerFill }}
       >
         <EditableText
           value={shape.text}
@@ -485,7 +516,138 @@ function ErdTableBody({ shape, dispatch, disableDblClick, cornerStyle, fill, bor
   )
 }
 
-function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers, zoom }) {
+// One shared layout for every System Architecture node (~55 shapes, see
+// shapeCatalog.js's own systemArchShapes) - an icon badge over a label,
+// rather than 55 near-identical bespoke JSX blocks differing only in which
+// glyph and text they show. headerFill/fill/fillTint/cornerStyle/
+// borderStyleValue are the same computed values ShapeBody's other branches
+// already pass down to SwimlaneBody/ErdTableBody, so a custom fill color or
+// hidden background applies here exactly the same way it does everywhere
+// else.
+//
+// Not every shape gets the bordered-card treatment - shapeCatalog.js's own
+// systemArchNoBorderKeys marks anything whose glyph is already a complete,
+// self-contained pictorial symbol (a person, a cylinder, a cloud, a shield,
+// a card, a folder...) the same way the existing 'actor' shape has always
+// rendered with no box at all: a bigger icon and a label, nothing framing
+// it. Wrapping something like a database cylinder or an actor's stick
+// figure in a second outer box was redundant - the icon already reads as
+// its own shape.
+function SystemArchNodeBody({
+  shape,
+  commitField,
+  disableDblClick,
+  cornerStyle,
+  fill,
+  fillTint,
+  headerFill,
+  borderStyleValue,
+  textStyle,
+}) {
+  if (systemArchNoBorderKeys.has(shape.type)) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-orange-600" style={{ color: fill || undefined }}>
+        <SystemArchIcon type={shape.type} size={32} strokeWidth={1.6} className="h-[62%] w-auto shrink-0" />
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder={PLACEABLE_SHAPE_LABEL_BY_KEY[shape.type] ?? shape.type}
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[11.5px] font-medium leading-snug text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-orange-600/50 px-2 py-2"
+      style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
+    >
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-600/10 text-orange-600"
+        style={{ backgroundColor: headerFill ? `color-mix(in srgb, ${headerFill} 15%, transparent)` : undefined, color: fill || undefined }}
+      >
+        <SystemArchIcon type={shape.type} size={18} />
+      </span>
+      <EditableText
+        value={shape.text}
+        onCommit={commitField('text')}
+        placeholder={PLACEABLE_SHAPE_LABEL_BY_KEY[shape.type] ?? shape.type}
+        disableDblClick={disableDblClick}
+        className="w-full text-center text-[11.5px] font-medium leading-snug text-ink"
+        style={textStyle}
+      />
+    </div>
+  )
+}
+
+// Same shell as SystemArchNodeBody above, just violet instead of orange and
+// keyed off networkNoBorderKeys/NetworkIcon instead - the two diagram types
+// share this exact "bordered card vs. bare pictorial icon" layout rather
+// than each getting its own near-duplicate implementation.
+function NetworkNodeBody({
+  shape,
+  commitField,
+  disableDblClick,
+  cornerStyle,
+  fill,
+  fillTint,
+  headerFill,
+  borderStyleValue,
+  textStyle,
+}) {
+  if (networkNoBorderKeys.has(shape.type)) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-violet-600" style={{ color: fill || undefined }}>
+        <NetworkIcon type={shape.type} size={32} strokeWidth={1.6} className="h-[62%] w-auto shrink-0" />
+        <EditableText
+          value={shape.text}
+          onCommit={commitField('text')}
+          placeholder={PLACEABLE_SHAPE_LABEL_BY_KEY[shape.type] ?? shape.type}
+          disableDblClick={disableDblClick}
+          className="w-full text-center text-[11.5px] font-medium leading-snug text-ink"
+          style={textStyle}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-violet-600/50 px-2 py-2"
+      style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
+    >
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-600/10 text-violet-600"
+        style={{ backgroundColor: headerFill ? `color-mix(in srgb, ${headerFill} 15%, transparent)` : undefined, color: fill || undefined }}
+      >
+        <NetworkIcon type={shape.type} size={18} />
+      </span>
+      <EditableText
+        value={shape.text}
+        onCommit={commitField('text')}
+        placeholder={PLACEABLE_SHAPE_LABEL_BY_KEY[shape.type] ?? shape.type}
+        disableDblClick={disableDblClick}
+        className="w-full text-center text-[11.5px] font-medium leading-snug text-ink"
+        style={textStyle}
+      />
+    </div>
+  )
+}
+
+// Exported so DfdMockup.jsx (the marketing/sign-in page's animated preview)
+// can render actual shapes through this exact function instead of a
+// hand-copied lookalike - a lookalike is exactly what silently drifted out
+// of sync with this file more than once already (Data Store's whole layout
+// changed here without that copy ever being told). A no-op dispatch,
+// disableDblClick, empty dragHandlers, and zoom=1 there is enough to use
+// this safely outside the editor: nothing in this function drives a drag/
+// resize/rotate gesture on its own (Shape.jsx's outer wrapper below owns
+// all of that), and disableDblClick already blocks the one path
+// (EditableText's own double-click handler) that could ever call dispatch.
+export function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers, zoom }) {
   const commitField = (field) => (value) =>
     dispatch({ type: 'RENAME_SHAPE', id: shape.id, field, value })
   const textStyle = textFormatStyle(shape)
@@ -499,7 +661,18 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers, zoom }) {
   // leave the type's own Tailwind brand color (blue/purple/pink) showing
   // through untouched until the user actually picks a fill color.
   const fill = shape.fillColor
-  const fillTint = fill ? `color-mix(in srgb, ${fill} 8%, white)` : undefined
+  // Hide/show background (EditorTopbar's Style group) - deliberately never
+  // touches `fill` itself or anywhere it drives *border* color (every
+  // borderColor: fill || undefined below stays exactly as-is regardless),
+  // only the two ways a shape's own fill actually paints a *background*:
+  // fillTint (the light body tint most shapes use) and headerFill (the
+  // solid color a few types - Process's badge, a swimlane's lane headers,
+  // an ERD table's header - use for a title bar instead). Defaults true
+  // (shown) when unset, so a shape saved before this field existed keeps
+  // looking exactly as it already did.
+  const showBackground = shape.backgroundVisible ?? true
+  const fillTint = !showBackground ? 'transparent' : fill ? `color-mix(in srgb, ${fill} 8%, white)` : undefined
+  const headerFill = !showBackground ? 'transparent' : fill || undefined
   // undefined (not 'solid') for the common case, same additive-only
   // reasoning as cornerStyle - a shape's Tailwind border-2 class already
   // renders solid on its own, so this only needs to override anything once
@@ -537,7 +710,7 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers, zoom }) {
             id bar sitting above the process's own name). */}
         <div
           className="flex shrink-0 items-center justify-center bg-brand-purple px-3 py-2.5"
-          style={{ backgroundColor: fill || undefined }}
+          style={{ backgroundColor: headerFill }}
         >
           <EditableText
             value={shape.badge}
@@ -548,7 +721,7 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers, zoom }) {
           />
         </div>
         <div
-          className="flex flex-1 items-center justify-center bg-brand-purple/6 px-3 py-2"
+          className="flex flex-1 items-center justify-center bg-brand-purple/6 px-2 py-1"
           style={{ backgroundColor: fillTint }}
         >
           <EditableText
@@ -1096,6 +1269,7 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers, zoom }) {
         disableDblClick={disableDblClick}
         cornerStyle={cornerStyle}
         fill={fill}
+        headerFill={headerFill}
         borderStyleValue={borderStyleValue}
         dragHandlers={dragHandlers}
       />
@@ -1110,8 +1284,41 @@ function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers, zoom }) {
         disableDblClick={disableDblClick}
         cornerStyle={cornerStyle}
         fill={fill}
+        headerFill={headerFill}
         borderStyleValue={borderStyleValue}
         zoom={zoom}
+      />
+    )
+  }
+
+  if (systemArchOwnShapeKeys.has(shape.type)) {
+    return (
+      <SystemArchNodeBody
+        shape={shape}
+        commitField={commitField}
+        disableDblClick={disableDblClick}
+        cornerStyle={cornerStyle}
+        fill={fill}
+        fillTint={fillTint}
+        headerFill={headerFill}
+        borderStyleValue={borderStyleValue}
+        textStyle={textStyle}
+      />
+    )
+  }
+
+  if (networkOwnShapeKeys.has(shape.type)) {
+    return (
+      <NetworkNodeBody
+        shape={shape}
+        commitField={commitField}
+        disableDblClick={disableDblClick}
+        cornerStyle={cornerStyle}
+        fill={fill}
+        fillTint={fillTint}
+        headerFill={headerFill}
+        borderStyleValue={borderStyleValue}
+        textStyle={textStyle}
       />
     )
   }
@@ -1224,11 +1431,14 @@ function Shape({
     const currentState = stateRef.current
     const idsToTrack = isMultiSelected ? currentState.selection.ids : [shape.id]
 
-    // Selection above still applies for a viewer - only the drag session
-    // itself is skipped, so the shape doesn't visually "try to follow the
-    // cursor" for a MOVE_SHAPE that guardedDispatch would silently drop
-    // anyway (see useDiagramEditor.js).
-    if (readOnly) return
+    // Selection above still applies for a viewer or a locked shape - only
+    // the drag session itself is skipped, so the shape doesn't visually
+    // "try to follow the cursor" for a MOVE_SHAPE the reducer would
+    // silently no-op anyway (guardedDispatch for a viewer, TOGGLE_SHAPE_LOCK's
+    // own gate in useDiagramEditor.js for a locked shape). Still selectable
+    // either way - that's what lets a locked shape actually be unlocked
+    // again via the context menu.
+    if (readOnly || shape.locked) return
 
     event.currentTarget.setPointerCapture(event.pointerId)
     dragRef.current = {
@@ -1402,6 +1612,7 @@ function Shape({
         {showHandles && (
           <ShapeHandles shape={shape} dispatch={dispatch} outerRef={outerRef} zoom={zoom} />
         )}
+        {shape.locked && <LockBadge />}
       </div>
     </div>
   )

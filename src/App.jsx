@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
 import { supabase } from './lib/supabaseClient'
 import Navbar from './components/Navbar'
+import SignInPage from './components/SignInPage'
 import Hero from './components/Hero'
 import Features from './components/Features'
 import HowItWorks from './components/HowItWorks'
@@ -10,20 +11,21 @@ import Footer from './components/Footer'
 import Dashboard from './components/Dashboard'
 import WorkspaceHome from './components/WorkspaceHome'
 import DiagramWorkspace from './components/DiagramWorkspace'
-import SettingsView from './components/SettingsView'
-import DeveloperInfoView from './components/DeveloperInfoView'
 import LoadingScreen from './components/LoadingScreen'
+import DocsPage from './components/DocsPage'
+import HelpCenterPage from './components/HelpCenterPage'
+import UpdatesPage from './components/UpdatesPage'
 import './App.css'
 
-function LandingPage({ onSignIn, isSigningIn, authError }) {
+function LandingPage() {
   return (
     <>
-      <Navbar onSignIn={onSignIn} isSigningIn={isSigningIn} />
+      <Navbar />
       <main>
-        <Hero onSignIn={onSignIn} isSigningIn={isSigningIn} authError={authError} />
+        <Hero />
         <Features />
         <HowItWorks />
-        <CtaSection onSignIn={onSignIn} isSigningIn={isSigningIn} />
+        <CtaSection />
       </main>
       <Footer />
     </>
@@ -79,10 +81,26 @@ function App() {
           session ? (
             <Navigate to="/workspace" replace />
           ) : (
-            <LandingPage onSignIn={signIn} isSigningIn={isSigningIn} authError={authError} />
+            <LandingPage />
           )
         }
       />
+      <Route
+        path="/sign-in"
+        element={
+          session ? (
+            <Navigate to="/workspace" replace />
+          ) : (
+            <SignInPage onSignIn={signIn} isSigningIn={isSigningIn} authError={authError} />
+          )
+        }
+      />
+      {/* Public regardless of session - unlike "/" and "/sign-in", a signed-in
+          user isn't redirected away from docs (there's no reason a returning
+          user shouldn't be able to look something up). */}
+      <Route path="/docs" element={<DocsPage />} />
+      <Route path="/help" element={<HelpCenterPage />} />
+      <Route path="/updates" element={<UpdatesPage />} />
       <Route
         path="/workspace"
         element={
@@ -94,8 +112,9 @@ function App() {
         }
       >
         <Route index element={<WorkspaceHome />} />
-        <Route path="settings" element={<SettingsView user={session?.user} />} />
-        <Route path="developer" element={<DeveloperInfoView />} />
+        {/* Settings is a floating modal now (DashboardSidebar's own
+            SettingsModal), not a page - no more dedicated
+            /workspace/settings or /workspace/developer route. */}
         <Route path=":diagramId" element={<DiagramWorkspace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -72,7 +72,7 @@ function CardinalityChip({ arrowId, end, value, x, y, dispatch }) {
         onClick={toggleOpen}
         title={`${end === 'start' ? 'Start' : 'End'} cardinality: ${optionLabel}`}
         aria-label={`Set ${end === 'start' ? 'start' : 'end'} cardinality`}
-        className="flex h-5 w-7 items-center justify-center rounded-md border border-line bg-white text-soft shadow-sm transition-colors hover:border-brand-purple/40 hover:text-brand-purple"
+        className="flex h-5 w-7 items-center justify-center rounded-md border border-line bg-white text-soft shadow-sm transition-colors hover:border-ink/40 hover:text-ink"
       >
         <ErdCardinalityIcon value={value} />
       </button>
@@ -93,13 +93,13 @@ function CardinalityChip({ arrowId, end, value, x, y, dispatch }) {
                     setOpen(false)
                   }}
                   className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-surface-soft ${
-                    value === option.value ? 'font-medium text-ink' : 'text-soft'
+                    value === option.value ? 'font-medium text-brand-blue' : 'text-soft'
                   }`}
                 >
                   <ErdCardinalityIcon value={option.value} className="h-3.5 w-6 shrink-0" />
                   <span className="flex-1">{option.label}</span>
                   {value === option.value && (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand-purple">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand-blue">
                       <path d="M20 6 9 17l-5-5" />
                     </svg>
                   )}

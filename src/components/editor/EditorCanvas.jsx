@@ -3,10 +3,11 @@ import Shape from './Shape'
 import ArrowLayer from './ArrowLayer'
 import ArrowLabels from './ArrowLabels'
 import ArrowCardinalityPickers from './ArrowCardinalityPickers'
+import CommentLayer from './CommentLayer'
 import EditorContextMenu from './EditorContextMenu'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { containsPoint } from './arrowRouting'
-import { readClipboard } from './useDiagramEditor'
+import { readClipboard, MIN_ZOOM, MAX_ZOOM } from './useDiagramEditor'
 
 export const CANVAS_WIDTH = 2400
 export const CANVAS_HEIGHT = 1400
@@ -159,6 +160,13 @@ function EditorCanvas({ canvasNodeRef }) {
   const marqueeDragRef = useRef(null)
   const zoomAnchorRef = useRef(null)
   const prevZoomRef = useRef(zoom)
+  // Set by handleZoomToFit just before dispatching SET_ZOOM - { x, y } in
+  // canvas/world coordinates to center the viewport on once the zoom
+  // effect below actually runs, taking priority over zoomAnchorRef's own
+  // "keep this screen point anchored" logic (fitting content wants a
+  // specific world point centered, not whatever was already under the
+  // cursor/viewport-center before the zoom changed).
+  const fitTargetRef = useRef(null)
   const [marqueeRect, setMarqueeRect] = useState(null)
   // Double-click-and-hold empty canvas to pan by dragging, instead of
   // hunting for the scrollbar - panRef tracks the in-progress gesture
@@ -167,6 +175,25 @@ function EditorCanvas({ canvasNodeRef }) {
   const panRef = useRef(null)
   const lastCanvasClickAtRef = useRef(0)
   const [isPanning, setIsPanning] = useState(false)
+  // A brand-new, not-yet-submitted comment's canvas position - local-only
+  // (not dispatched) until actually posted, so clicking around with the
+  // Comment tool active can't litter the shared, synced commentThreads with
+  // empty drafts (see ADD_COMMENT_THREAD's own comment on why it requires
+  // real content). Cleared whenever the Comment tool is deselected, so
+  // switching to a different tool mid-compose can't leave an orphaned
+  // composer floating with no way back to it.
+  const [pendingCommentPos, setPendingCommentPos] = useState(null)
+  // Adjusting state during render (comparing against last-seen state, not
+  // a ref - this project's stricter lint rule disallows reading/writing
+  // refs during render) - same pattern useDiagramEditor.js's own
+  // lastPersisted/persistedChanged uses, for the same underlying reason: a
+  // plain setState-inside-a-useEffect here would risk a cascading extra
+  // render.
+  const [lastToolSeen, setLastToolSeen] = useState(state.tool)
+  if (lastToolSeen !== state.tool) {
+    setLastToolSeen(state.tool)
+    if (state.tool !== 'comment' && pendingCommentPos) setPendingCommentPos(null)
+  }
   // Right-click menu (EditorContextMenu) - shape-only by design, see its own
   // comment. Just a screen position + open/closed; the menu itself reads
   // everything else it needs straight from `state`/`dispatch`.
@@ -260,6 +287,24 @@ function EditorCanvas({ canvasNodeRef }) {
         event.preventDefault()
         dispatch({ type: event.shiftKey ? 'UNGROUP_SELECTED' : 'GROUP_SELECTED' })
       }
+      // Ctrl+]/Ctrl+[ step one position forward/backward, Ctrl+Shift+]/
+      // Ctrl+Shift+[ jump all the way to front/back - same four-way split
+      // Illustrator/Figma use, offered here as shortcuts for the same
+      // actions the topbar/context-menu's own z-order buttons already
+      // dispatch (BRING_TO_FRONT/SEND_TO_BACK didn't have a shortcut at
+      // all before this; BRING_FORWARD/SEND_BACKWARD are brand new).
+      if ((event.ctrlKey || event.metaKey) && (event.key === ']' || event.key === '[')) {
+        if (state.selection?.kind !== 'shape') return
+        event.preventDefault()
+        const forward = event.key === ']'
+        dispatch({ type: event.shiftKey ? (forward ? 'BRING_TO_FRONT' : 'SEND_TO_BACK') : (forward ? 'BRING_FORWARD' : 'SEND_BACKWARD') })
+      }
+      // Ctrl+Shift+L - same "toggle" convention Figma uses for lock/unlock.
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'l') {
+        if (state.selection?.kind !== 'shape') return
+        event.preventDefault()
+        dispatch({ type: 'TOGGLE_SHAPE_LOCK' })
+      }
       // Nudge the selected shape(s) - Shift for the larger 10px step, plain
       // arrow for 1px, matching the usual design-tool convention. Dispatched
       // as its own MOVE_SHAPE(s)-then-DRAG_END pair (not left mid-gesture)
@@ -310,6 +355,15 @@ function EditorCanvas({ canvasNodeRef }) {
     if (!wrapper || prevZoom === zoom) return
 
     const wrapperRect = wrapper.getBoundingClientRect()
+
+    const fitTarget = fitTargetRef.current
+    fitTargetRef.current = null
+    if (fitTarget) {
+      wrapper.scrollLeft = fitTarget.x * zoom - wrapperRect.width / 2
+      wrapper.scrollTop = fitTarget.y * zoom - wrapperRect.height / 2
+      return
+    }
+
     const anchor = zoomAnchorRef.current
     zoomAnchorRef.current = null
     const offsetX = anchor ? anchor.clientX - wrapperRect.left : wrapperRect.width / 2
@@ -320,6 +374,61 @@ function EditorCanvas({ canvasNodeRef }) {
     wrapper.scrollLeft = contentX * zoom - offsetX
     wrapper.scrollTop = contentY * zoom - offsetY
   }, [zoom])
+
+  // "Zoom to fit" (EditorTopbar's own button) - dispatches
+  // REQUEST_ZOOM_TO_FIT (just a counter bump, see its own comment in
+  // useDiagramEditor.js) rather than computing everything there, since the
+  // reducer has no way to measure the actual visible viewport - only this
+  // component has wrapperRef. Skipped on the very first render (the ref
+  // starts at 0 and nothing requested a fit yet) via the "already handled"
+  // ref below, same guard pattern prevZoomRef uses for the effect above.
+  const handledFitRequestIdRef = useRef(state.zoomFitRequestId)
+  useEffect(() => {
+    if (handledFitRequestIdRef.current === state.zoomFitRequestId) return
+    handledFitRequestIdRef.current = state.zoomFitRequestId
+    const wrapper = wrapperRef.current
+    if (!wrapper || state.shapeOrder.length === 0) return
+
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const id of state.shapeOrder) {
+      const shape = state.shapes[id]
+      minX = Math.min(minX, shape.x)
+      minY = Math.min(minY, shape.y)
+      maxX = Math.max(maxX, shape.x + shape.width)
+      maxY = Math.max(maxY, shape.y + shape.height)
+    }
+
+    const FIT_PADDING = 80
+    const contentWidth = Math.max(1, maxX - minX)
+    const contentHeight = Math.max(1, maxY - minY)
+    const nextZoom = Math.min(
+      MAX_ZOOM,
+      Math.max(
+        MIN_ZOOM,
+        Math.min(
+          (wrapper.clientWidth - FIT_PADDING * 2) / contentWidth,
+          (wrapper.clientHeight - FIT_PADDING * 2) / contentHeight,
+        ),
+      ),
+    )
+    const target = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }
+
+    if (nextZoom === zoom) {
+      // The zoom effect above only runs on an actual zoom *change* - if the
+      // fit zoom happens to already match the current one, nothing would
+      // ever apply fitTargetRef, so scroll straight to the target instead.
+      const wrapperRect = wrapper.getBoundingClientRect()
+      wrapper.scrollLeft = target.x * zoom - wrapperRect.width / 2
+      wrapper.scrollTop = target.y * zoom - wrapperRect.height / 2
+    } else {
+      fitTargetRef.current = target
+      dispatch({ type: 'SET_ZOOM', zoom: nextZoom })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.zoomFitRequestId])
 
   const handleCanvasPointerDown = (event) => {
     if (event.target !== event.currentTarget) return
@@ -368,6 +477,17 @@ function EditorCanvas({ canvasNodeRef }) {
         startLogicalY: (event.clientY - rect.top) / zoom,
         moved: false,
       }
+      return
+    }
+
+    // Comment tool: opens the composer at the click point rather than
+    // placing anything immediately - see pendingCommentPos's own comment
+    // above for why this is local state, not a dispatch.
+    if (state.tool === 'comment') {
+      setPendingCommentPos({
+        x: (event.clientX - rect.left) / zoom,
+        y: (event.clientY - rect.top) / zoom,
+      })
       return
     }
 
@@ -547,9 +667,15 @@ function EditorCanvas({ canvasNodeRef }) {
             // A viewer can still select a shape (harmless, purely local) but
             // never drag/resize/rotate it - handles that would silently do
             // nothing on drag are worse than no handles at all, so they
-            // don't render rather than rendering disabled.
+            // don't render rather than rendering disabled. A locked shape
+            // gets the same treatment for the same reason - see
+            // TOGGLE_SHAPE_LOCK's own comment in useDiagramEditor.js.
             const showHandles =
-              isSelected && state.tool === 'select' && state.selection.ids.length === 1 && !readOnly
+              isSelected &&
+              state.tool === 'select' &&
+              state.selection.ids.length === 1 &&
+              !readOnly &&
+              !state.shapes[id]?.locked
             return (
               <Shape
                 key={id}
@@ -575,6 +701,14 @@ function EditorCanvas({ canvasNodeRef }) {
           })}
           <ArrowLabels />
           <ArrowCardinalityPickers />
+          <CommentLayer
+            zoom={zoom}
+            pendingCommentPos={pendingCommentPos}
+            onCancelPending={() => {
+              setPendingCommentPos(null)
+              if (state.tool === 'comment') dispatch({ type: 'SET_TOOL', tool: 'select' })
+            }}
+          />
           <AlignmentGuideLines guides={state.alignmentGuides} />
           {cursors.map((cursor) => (
             <CursorMarker

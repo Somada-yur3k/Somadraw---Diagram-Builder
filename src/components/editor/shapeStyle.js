@@ -1,3 +1,5 @@
+import { systemArchOwnShapeKeys, networkOwnShapeKeys } from './shapeCatalog'
+
 // Each shape type ships with its own default rounding today (rounded-lg /
 // rounded-2xl / none), expressed only as a Tailwind class on ShapeBody's outer
 // div. These are that same look expressed as px, so the topbar stepper can
@@ -36,6 +38,12 @@ export const DEFAULT_CORNER_RADIUS_BY_TYPE = {
   swimlaneH1: 8,
   swimlaneH2: 8,
   erdTable: 8,
+  // Same "one shared look for the whole category" as DEFAULT_FILL_COLOR_BY_TYPE
+  // below - System Architecture's ~55 shapes are all the same card layout
+  // (see Shape.jsx's SystemArchNodeBody), so one rounding value covers all
+  // of them instead of 55 individually-tuned entries.
+  ...Object.fromEntries([...systemArchOwnShapeKeys].map((key) => [key, 12])),
+  ...Object.fromEntries([...networkOwnShapeKeys].map((key) => [key, 12])),
 }
 
 export const MIN_CORNER_RADIUS = 0
@@ -100,4 +108,13 @@ export const DEFAULT_FILL_COLOR_BY_TYPE = {
   // comment on erdTable) - the rest of the card stays the plain white/border
   // look every other container here already uses.
   erdTable: '#64748b',
+  // One shared accent (orange - not otherwise used by any type above) for
+  // every System Architecture shape, the same way ERD's own single shape
+  // type gets one color - ties the whole new diagram type together
+  // visually rather than needing a bespoke color per icon.
+  ...Object.fromEntries([...systemArchOwnShapeKeys].map((key) => [key, '#ea580c'])),
+  // One shared accent (violet - distinct from every color already claimed
+  // above, including System Architecture's own orange) for every Network
+  // Diagram shape, same reasoning as that entry's own comment.
+  ...Object.fromEntries([...networkOwnShapeKeys].map((key) => [key, '#7c3aed'])),
 }

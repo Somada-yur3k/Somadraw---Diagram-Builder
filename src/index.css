@@ -4,26 +4,56 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
     Roboto, sans-serif;
 
-  --color-ink: #14121f;
-  --color-body: #5b586e;
-  --color-soft: #8f8ca3;
-  --color-line: #e8e7f1;
-  --color-line-soft: #f0f0f7;
-  --color-canvas: #fafaff;
-  --color-surface-soft: #f7f7fb;
+  /* "Classic Blue" system - a cool slate neutral scale (paired to read
+     cleanly against the blue-tinted --color-canvas below) plus one accent,
+     rather than the old achromatic-gray + blue/purple/pink three-hue brand.
+     --color-line-soft/--color-surface-soft intentionally land on the same
+     stop (slate-100) - they were already near-identical before this, just
+     re-hued together. */
+  --color-ink: #0a0a0a;
+  --color-body: #475569;
+  --color-soft: #64748b;
+  --color-line: #e2e8f0;
+  --color-line-soft: #f1f5f9;
+  --color-canvas: #f8fafc;
+  --color-surface-soft: #f1f5f9;
 
-  --color-brand-blue: #3b82f6;
-  --color-brand-purple: #8b5cf6;
+  --color-brand-blue: #2563eb;
+  /* Not its own hue anymore - every place that used to reach for purple as
+     "the interactive accent" (selection rings/handles, the marquee-select
+     box, a selected arrow's stroke, the UML class header, etc.) now
+     resolves to the same blue as everything else, via this alias, without
+     having to touch every one of those call sites individually. */
+  --color-brand-purple: var(--color-brand-blue);
+  /* Kept its own hue on purpose, unlike brand-purple above - this is the
+     alignment-guide color (EditorCanvas.jsx), which can be on-screen at the
+     same time as a blue selection ring/handle while dragging a shape near
+     another one. Collapsing it into the same blue would make two distinct
+     signals ("this is selected" vs "this lines up with that")
+     indistinguishable from each other exactly when it matters most. */
   --color-brand-pink: #ec4899;
 }
 
 html {
   color-scheme: light;
+  /* So the Navbar's #features/#how-it-works anchor links (and any other
+     in-page jump) glide instead of snapping straight there. */
+  scroll-behavior: smooth;
 }
 
 @utility container {
   margin-inline: auto;
   padding-inline: 1.5rem;
+
+  /* No max-width below this, so content fills the viewport minus padding
+     on phones/tablets - fine there, but left unbounded it also runs
+     edge-to-edge on wide desktop monitors. Capping the width once the
+     viewport is desktop-sized brings back real left/right margins instead
+     of text stretching the full screen. */
+  @media (min-width: 1024px) {
+    max-width: 1240px;
+    padding-inline: 2rem;
+  }
 }
 
 body {
@@ -37,25 +67,16 @@ body {
 }
 
 @layer utilities {
+  /* Flat solid blue, not an actual gradient, now that "Classic Blue" is a
+     single accent rather than a blue/purple/pink brand trio - kept as its
+     own named utility (instead of inlining bg-brand-blue/text-brand-blue at
+     each call site) so every CTA/accent surface stays wired to one place. */
   .gradient-text {
-    background-image: linear-gradient(
-      90deg,
-      var(--color-brand-blue) 0%,
-      var(--color-brand-purple) 55%,
-      var(--color-brand-pink) 100%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: var(--color-brand-blue);
   }
 
   .gradient-bg {
-    background-image: linear-gradient(
-      90deg,
-      var(--color-brand-blue) 0%,
-      var(--color-brand-purple) 55%,
-      var(--color-brand-pink) 100%
-    );
+    background-color: var(--color-brand-blue);
   }
 
   .animate-float-a {
@@ -91,6 +112,23 @@ body {
 
   .animate-shape-enter {
     animation: shape-enter 180ms ease-out;
+  }
+
+  /* Sign-in page mockup only - two fake collaborator cursors drifting
+     around the DfdMockup panel, standing in for real-time co-editing
+     (SignInPage.jsx). Different durations/delays/waypoints so the two
+     never look synced or robotic. */
+  /* backwards: without it, an element with an animation-delay sits at its
+     un-animated default position (no left/top at all here) until the delay
+     elapses, then jumps to the 0% keyframe - on reload that read as Marco's
+     cursor being frozen in the wrong spot for 1.8s before suddenly
+     "starting." backwards applies the 0% keyframe immediately, through the
+     delay, so it's already in place and only the drift itself is delayed. */
+  .animate-cursor-a {
+    animation: cursor-drift-a 10s ease-in-out infinite backwards;
+  }
+  .animate-cursor-b {
+    animation: cursor-drift-b 12s ease-in-out infinite 1.8s backwards;
   }
 }
 
@@ -159,5 +197,45 @@ body {
   100% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes cursor-drift-a {
+  0%,
+  100% {
+    left: 20%;
+    top: 26%;
+  }
+  25% {
+    left: 46%;
+    top: 20%;
+  }
+  50% {
+    left: 40%;
+    top: 56%;
+  }
+  75% {
+    left: 18%;
+    top: 64%;
+  }
+}
+
+@keyframes cursor-drift-b {
+  0%,
+  100% {
+    left: 72%;
+    top: 68%;
+  }
+  30% {
+    left: 80%;
+    top: 30%;
+  }
+  60% {
+    left: 48%;
+    top: 46%;
+  }
+  85% {
+    left: 66%;
+    top: 78%;
   }
 }

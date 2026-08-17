@@ -5,6 +5,7 @@ import { useDiagramEditorContext } from './DiagramEditorContext'
 import { MIN_ZOOM, MAX_ZOOM } from './useDiagramEditor'
 import { ZOOM_STEP } from './EditorCanvas'
 import { MIN_W as MIN_SHAPE_WIDTH, MIN_H as MIN_SHAPE_HEIGHT } from './ShapeHandles'
+import ColorPickerButton from './ColorPickerButton'
 import {
   FONT_OPTIONS,
   DEFAULT_FONT_ID,
@@ -27,7 +28,7 @@ import LoadingScreen from '../LoadingScreen'
 const CLEAR_LOADING_MS = 900
 // Matches --color-soft (index.css) - the line color an arrow renders with
 // until it's ever given its own via SET_ARROW_COLOR.
-const DEFAULT_ARROW_COLOR = '#8f8ca3'
+const DEFAULT_ARROW_COLOR = '#171717'
 
 // Common editor-style font sizes (the kind of list Google Docs/Figma
 // offer), filtered against the app's own clamp range so this list can
@@ -52,7 +53,15 @@ const ARROW_CONNECTOR_TYPES = [
   { key: 'erd', label: 'ERD Relationship' },
 ]
 
-const EXPORT_PANEL_WIDTH = 208 // matches w-52 below
+// These four render a solid filled glyph (a dot, a ring+dot, a bar) that
+// *is* the whole shape, with no separate border/box around it the way every
+// other type has - Shape.jsx's own showBackground deliberately leaves their
+// fill untouched (hiding it would leave nothing at all, not "a shape with
+// no background"), so the toggle below has no effect on these and stays
+// hidden rather than sitting there as a dead control.
+const NO_BACKGROUND_TOGGLE_TYPES = new Set(['initial', 'final', 'forkJoinH', 'forkJoinV'])
+
+const EXPORT_PANEL_WIDTH = 288 // matches w-72 below
 // Right-aligned under the trigger (not the shared default centered-below
 // placement every other popover in this file uses) - the Export button
 // sits at the far right of the bar (ml-auto), so a centered panel would run
@@ -177,9 +186,10 @@ function LineStyleIcon() {
   )
 }
 
-// A filled pill when the label background is on, the same pill hollow with
-// a strike-through when it's off - mirrors the lock icon's own two-state
-// (open/closed shackle) treatment in ArrowLabels.jsx.
+// A filled pill when a background is on, the same pill hollow with a
+// strike-through when it's off - mirrors the lock icon's own two-state
+// (open/closed shackle) treatment in ArrowLabels.jsx. Shared by both the
+// arrow-label toggle and the shape toggle below - same concept, same glyph.
 function LabelBackgroundIcon({ on }) {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
@@ -287,6 +297,66 @@ function SendToBackIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="12" height="12" rx="1.5" fill="white" />
       <rect x="9" y="9" width="12" height="12" rx="1.5" opacity="0.4" />
+    </svg>
+  )
+}
+
+function BringForwardIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="12" height="12" rx="1.5" opacity="0.4" />
+      <rect x="9" y="9" width="12" height="12" rx="1.5" fill="white" />
+      <path d="M15 11.5V8M13.3 9.7 15 8l1.7 1.7" />
+    </svg>
+  )
+}
+
+function SendBackwardIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="12" height="12" rx="1.5" fill="white" />
+      <rect x="9" y="9" width="12" height="12" rx="1.5" opacity="0.4" />
+      <path d="M9 12.5V16M7.3 14.3 9 16l1.7-1.7" />
+    </svg>
+  )
+}
+
+function DistributeHIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="12" x2="22" y2="12" strokeDasharray="1 2.6" />
+      <rect x="3" y="7" width="5" height="10" rx="1" />
+      <rect x="10.5" y="7" width="3" height="10" rx="1" />
+      <rect x="16" y="7" width="5" height="10" rx="1" />
+    </svg>
+  )
+}
+
+function DistributeVIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="2" x2="12" y2="22" strokeDasharray="1 2.6" />
+      <rect x="7" y="3" width="10" height="5" rx="1" />
+      <rect x="7" y="10.5" width="10" height="3" rx="1" />
+      <rect x="7" y="16" width="10" height="5" rx="1" />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="11" width="16" height="9" rx="1.5" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  )
+}
+
+function UnlockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="11" width="16" height="9" rx="1.5" />
+      <path d="M8 11V7a4 4 0 0 1 7.4-2" />
     </svg>
   )
 }
@@ -400,12 +470,46 @@ function DownloadIcon() {
   )
 }
 
+// The export popover's own two option icons - a landscape-photo glyph for
+// PNG, a page-with-folded-corner for PDF. Distinct enough at a glance that
+// the icon alone previews which format each row is, before reading either
+// title.
+function ExportImageIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="m21 15-5-5L5 21" />
+    </svg>
+  )
+}
+
+function ExportDocumentIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 2v6h6" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="13" y2="17" />
+    </svg>
+  )
+}
+
 // Small "this opens a dropdown" indicator - mirrors the caret every
 // value/dropdown-style control in the reference image has next to it.
 function ChevronDownIcon() {
   return (
     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-60">
       <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
+
+function FitToScreenIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <path d="M4 8V5a1 1 0 0 1 1-1h3M20 8V5a1 1 0 0 0-1-1h-3M4 16v3a1 1 0 0 0 1 1h3M20 16v3a1 1 0 0 1-1 1h-3" />
+      <rect x="8" y="9" width="8" height="6" rx="1" />
     </svg>
   )
 }
@@ -521,7 +625,6 @@ function SaveStatus({ status }) {
 function EditorTopbar({ canvasNodeRef }) {
   const { state, dispatch, diagramName, canUndo, canRedo, saveStatus, readOnly } = useDiagramEditorContext()
   const zoom = state.viewport.zoom
-  const colorInputRef = useRef(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -615,10 +718,21 @@ function EditorTopbar({ canvasNodeRef }) {
   // never disagree about when either is available.
   const hasShapeSelectionAny = state.selection?.kind === 'shape' && state.selection.ids.length > 0
   const hasMultiShapeSelection = hasShapeSelectionAny && state.selection.ids.length > 1
+  const canDistribute = hasShapeSelectionAny && state.selection.ids.length > 2
   const canUngroup = hasShapeSelectionAny && Boolean(state.shapes[state.selection.ids[0]]?.groupId)
+  // Same "reflects what the click is about to do" reasoning as
+  // EditorContextMenu's own willLock - not each selected shape's own
+  // individual current state.
+  const willLockSelection =
+    hasShapeSelectionAny && state.selection.ids.some((id) => !state.shapes[id]?.locked)
 
   const alignSelected = (edge) => {
     dispatch({ type: 'ALIGN_SELECTED', edge })
+    alignPopover.close()
+  }
+
+  const distributeSelected = (axis) => {
+    dispatch({ type: 'DISTRIBUTE_SELECTED', axis })
     alignPopover.close()
   }
 
@@ -685,7 +799,6 @@ function EditorTopbar({ canvasNodeRef }) {
     : selectedArrow
       ? selectedArrow.color || DEFAULT_ARROW_COLOR
       : '#8b5cf6'
-  const fillColorInputRef = useRef(null)
 
   // One Line style control, shared by shapes and arrows the same way Fill
   // is above - a shape's borderStyle and an arrow's lineStyle are different
@@ -708,6 +821,18 @@ function EditorTopbar({ canvasNodeRef }) {
   const toggleLabelBackground = () => {
     if (!selectedArrow) return
     dispatch({ type: 'TOGGLE_ARROW_LABEL_BACKGROUND', id: selectedArrow.id })
+  }
+
+  // Shape counterpart of the label toggle above - hides/shows the fill
+  // (body tint, and any solid header bar) without touching the border,
+  // which stays exactly as-is either way (see Shape.jsx's own
+  // showBackground/headerFill comment).
+  const showShapeBackgroundControl =
+    Boolean(selectedShape) && !NO_BACKGROUND_TOGGLE_TYPES.has(selectedShape.type)
+  const currentShapeBackground = selectedShape?.backgroundVisible ?? true
+  const toggleShapeBackground = () => {
+    if (!selectedShape) return
+    dispatch({ type: 'TOGGLE_SHAPE_BACKGROUND', id: selectedShape.id })
   }
 
   // Arrow-only (a shape has no equivalent concept of "connector type" or
@@ -829,70 +954,25 @@ function EditorTopbar({ canvasNodeRef }) {
     setActiveTab(formatKey ? 'format' : 'home')
   }
 
-  // input[type=color]'s React onChange fires on every native `input` event,
-  // which Chromium's in-page picker emits continuously while the user drags
-  // inside it - wiring dispatch straight to onChange would turn one color
-  // pick into a dozen-plus undo checkpoints. Commit only on the native
-  // `change` event (fires once, on close/commit) instead, matching this
-  // editor's existing precedent for the same class of problem (the wheel
-  // listener in EditorCanvas.jsx is also attached natively rather than via
-  // JSX, for the same "React's synthetic event doesn't give enough
-  // granularity" reason).
-  //
-  // The input itself is deliberately UNCONTROLLED (no `value` prop) - a
-  // controlled input paired with a no-op onChange fights React's own input
-  // value tracking the moment the native picker commits a value, which can
-  // silently revert the swatch back to its old value right as the `change`
-  // event fires. Syncing `.value` imperatively below, only when the actual
-  // underlying color changes, avoids that fight entirely while still keeping
-  // the swatch in sync with undo/redo or switching the selection.
-  useEffect(() => {
-    const input = colorInputRef.current
-    if (!input || !formatTarget) return
-    const handleChange = (event) => updateFormat({ textColor: event.target.value })
-    input.addEventListener('change', handleChange)
-    return () => input.removeEventListener('change', handleChange)
-    // Deliberately narrower than "everything referenced inside": re-attaching
-    // only needs to happen when the target's id (or shape/arrow kind)
-    // changes - updateFormat/formatTarget change on every unrelated field
-    // edit (new object reference each dispatch) but always resolve to the
-    // same id/action type in between, so the handler stays correct without
-    // needing to reattach then too.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formatTarget?.id, formatActionType])
+  // ColorPickerButton (its own file) owns the native-input plumbing this
+  // used to need directly (uncontrolled input, commit-on-native-`change`-
+  // not-React's-onChange, the works - see that component's own comments) -
+  // these just need to be plain callbacks now.
+  const commitTextColor = (color) => {
+    if (!formatTarget) return
+    updateFormat({ textColor: color })
+  }
 
-  useEffect(() => {
-    const input = colorInputRef.current
-    if (!input) return
-    input.value = formatTarget?.textColor ?? '#14121f'
-  }, [formatTarget?.textColor])
-
-  // Same native-`change`-only commit reasoning as the text color input above,
-  // wired to its own ref since it's a separate input/property (the shape's
-  // own fill/border theme, not its text). One handler covers both a shape's
-  // fillColor and an arrow's own line color - whichever of the two is
-  // currently selected - since currentFillColor above already unifies which
-  // one this input represents.
-  useEffect(() => {
-    const input = fillColorInputRef.current
-    if (!input || !formatTarget) return
-    const handleChange = (event) => {
-      if (selectedShape) {
-        dispatch({ type: 'SET_SHAPE_FILL_COLOR', id: selectedShape.id, color: event.target.value })
-      } else if (selectedArrow) {
-        dispatch({ type: 'SET_ARROW_COLOR', id: selectedArrow.id, color: event.target.value })
-      }
+  // One handler covers both a shape's fillColor and an arrow's own line
+  // color - whichever of the two is currently selected - since
+  // currentFillColor above already unifies which one this represents.
+  const commitFillColor = (color) => {
+    if (selectedShape) {
+      dispatch({ type: 'SET_SHAPE_FILL_COLOR', id: selectedShape.id, color })
+    } else if (selectedArrow) {
+      dispatch({ type: 'SET_ARROW_COLOR', id: selectedArrow.id, color })
     }
-    input.addEventListener('change', handleChange)
-    return () => input.removeEventListener('change', handleChange)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formatTarget?.id])
-
-  useEffect(() => {
-    const input = fillColorInputRef.current
-    if (!input) return
-    input.value = currentFillColor
-  }, [currentFillColor])
+  }
 
   const setLineStyle = (lineStyle) => {
     if (selectedShape) {
@@ -1017,6 +1097,15 @@ function EditorTopbar({ canvasNodeRef }) {
                 +
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'REQUEST_ZOOM_TO_FIT' })}
+              title="Zoom to fit"
+              aria-label="Zoom to fit"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+            >
+              <FitToScreenIcon />
+            </button>
           </>
         )}
 
@@ -1038,7 +1127,7 @@ function EditorTopbar({ canvasNodeRef }) {
                     zoomPopover.close()
                   }}
                   className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                    percent === Math.round(zoom * 100) ? 'bg-surface-soft text-ink' : 'text-body'
+                    percent === Math.round(zoom * 100) ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   {percent}%
@@ -1098,27 +1187,44 @@ function EditorTopbar({ canvasNodeRef }) {
               createPortal(
                 <div
                   ref={exportPanelRef}
-                  className="fixed z-30 w-52 rounded-xl border border-line bg-white p-1.5 shadow-lg"
+                  className="fixed z-30 w-72 overflow-hidden rounded-2xl border border-line bg-white shadow-xl"
                   style={exportPopover.pos}
                 >
-                  <button
-                    type="button"
-                    onClick={() => handleExport('png')}
-                    className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-soft"
-                  >
-                    <span className="text-[13px] font-medium text-ink">PNG image</span>
-                    <span className="text-[11px] text-soft">
-                      Exact pixel snapshot - most accurate
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleExport('pdf')}
-                    className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-soft"
-                  >
-                    <span className="text-[13px] font-medium text-ink">PDF document</span>
-                    <span className="text-[11px] text-soft">Fixed A4 page, for printing</span>
-                  </button>
+                  <div className="border-b border-line px-4 py-3">
+                    <span className="text-[13px] font-semibold text-ink">Export diagram</span>
+                  </div>
+                  <div className="flex flex-col gap-1 p-2">
+                    <button
+                      type="button"
+                      onClick={() => handleExport('png')}
+                      className="group flex w-full items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-surface-soft"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink/8 text-ink transition-colors group-hover:bg-ink/12">
+                        <ExportImageIcon />
+                      </span>
+                      <span className="min-w-0 flex-1 pt-0.5">
+                        <span className="block text-[13.5px] font-medium text-ink">PNG image</span>
+                        <span className="mt-0.5 block text-[12px] leading-snug text-soft">
+                          Exact pixel snapshot - most accurate
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleExport('pdf')}
+                      className="group flex w-full items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-surface-soft"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink/8 text-ink transition-colors group-hover:bg-ink/12">
+                        <ExportDocumentIcon />
+                      </span>
+                      <span className="min-w-0 flex-1 pt-0.5">
+                        <span className="block text-[13.5px] font-medium text-ink">PDF document</span>
+                        <span className="mt-0.5 block text-[12px] leading-snug text-soft">
+                          Fixed A4 page, for printing
+                        </span>
+                      </span>
+                    </button>
+                  </div>
                 </div>,
                 document.body,
               )}
@@ -1178,7 +1284,7 @@ function EditorTopbar({ canvasNodeRef }) {
                         fontSizePopover.close()
                       }}
                       className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                        size === currentFontSize ? 'bg-surface-soft text-ink' : 'text-body'
+                        size === currentFontSize ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                       }`}
                     >
                       {size}
@@ -1191,13 +1297,13 @@ function EditorTopbar({ canvasNodeRef }) {
             {divider}
 
             <FormatGroup label="Text">
-              <input
-                ref={colorInputRef}
-                type="color"
-                defaultValue={formatTarget.textColor ?? '#14121f'}
+              {/* key: see the Fill swatch's own identical comment below. */}
+              <ColorPickerButton
+                key={formatTarget?.id}
+                value={formatTarget.textColor ?? '#14121f'}
+                onCommit={commitTextColor}
                 title="Text color"
-                aria-label="Text color"
-                className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-line p-0.5"
+                swatchClassName="h-8 w-8 rounded-md"
               />
 
               <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
@@ -1208,7 +1314,7 @@ function EditorTopbar({ canvasNodeRef }) {
                   title="Bold"
                   aria-label="Bold"
                   className={`flex h-8 w-8 items-center justify-center text-[13px] font-bold transition-colors hover:bg-surface-soft ${
-                    formatTarget.bold ? 'bg-surface-soft text-ink' : 'text-body'
+                    formatTarget.bold ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   B
@@ -1220,7 +1326,7 @@ function EditorTopbar({ canvasNodeRef }) {
                   title="Italic"
                   aria-label="Italic"
                   className={`flex h-8 w-8 items-center justify-center border-l border-line text-[13px] italic transition-colors hover:bg-surface-soft ${
-                    formatTarget.italic ? 'bg-surface-soft text-ink' : 'text-body'
+                    formatTarget.italic ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   I
@@ -1232,7 +1338,7 @@ function EditorTopbar({ canvasNodeRef }) {
                   title="Underline"
                   aria-label="Underline"
                   className={`flex h-8 w-8 items-center justify-center border-l border-line text-[13px] underline transition-colors hover:bg-surface-soft ${
-                    formatTarget.underline ? 'bg-surface-soft text-ink' : 'text-body'
+                    formatTarget.underline ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   U
@@ -1255,7 +1361,7 @@ function EditorTopbar({ canvasNodeRef }) {
                   title="Align text left"
                   aria-label="Align text left"
                   className={`flex h-8 w-8 items-center justify-center transition-colors hover:bg-surface-soft ${
-                    formatTarget.textAlign === 'left' ? 'bg-surface-soft text-ink' : 'text-body'
+                    formatTarget.textAlign === 'left' ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   <TextAlignLeftIcon />
@@ -1267,7 +1373,7 @@ function EditorTopbar({ canvasNodeRef }) {
                   title="Align text center"
                   aria-label="Align text center"
                   className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
-                    formatTarget.textAlign === 'center' ? 'bg-surface-soft text-ink' : 'text-body'
+                    formatTarget.textAlign === 'center' ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   <TextAlignCenterIcon />
@@ -1279,7 +1385,7 @@ function EditorTopbar({ canvasNodeRef }) {
                   title="Align text right"
                   aria-label="Align text right"
                   className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
-                    formatTarget.textAlign === 'right' ? 'bg-surface-soft text-ink' : 'text-body'
+                    formatTarget.textAlign === 'right' ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   <TextAlignRightIcon />
@@ -1304,13 +1410,17 @@ function EditorTopbar({ canvasNodeRef }) {
                 className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-line pl-1.5 pr-0.5 text-soft"
               >
                 <FillIcon />
-                <input
-                  ref={fillColorInputRef}
-                  type="color"
-                  defaultValue={currentFillColor}
+                {/* key: forces a remount on target change so the color
+                    picker's own native-input listener (attached once per
+                    mount - see its own comment on why) never keeps
+                    committing to whichever shape/arrow was selected when it
+                    first mounted. */}
+                <ColorPickerButton
+                  key={formatTarget?.id}
+                  value={currentFillColor}
+                  onCommit={commitFillColor}
                   title="Fill color"
-                  aria-label="Fill color"
-                  className="h-6 w-6 shrink-0 cursor-pointer rounded p-0.5"
+                  swatchClassName="h-6 w-6 rounded"
                 />
               </span>
 
@@ -1324,10 +1434,28 @@ function EditorTopbar({ canvasNodeRef }) {
                   title={currentLabelBackground ? 'Hide label background' : 'Show label background'}
                   aria-label="Toggle label background"
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
-                    currentLabelBackground ? 'bg-surface-soft text-ink' : 'text-body'
+                    currentLabelBackground ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   <LabelBackgroundIcon on={currentLabelBackground} />
+                </button>
+              )}
+
+              {/* Shape counterpart - see showShapeBackgroundControl/
+                  currentShapeBackground/toggleShapeBackground's own comment
+                  above. Never the border, only the fill. */}
+              {showShapeBackgroundControl && (
+                <button
+                  type="button"
+                  onClick={toggleShapeBackground}
+                  aria-pressed={currentShapeBackground}
+                  title={currentShapeBackground ? 'Hide background' : 'Show background'}
+                  aria-label="Toggle background"
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
+                    currentShapeBackground ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
+                  }`}
+                >
+                  <LabelBackgroundIcon on={currentShapeBackground} />
                 </button>
               )}
 
@@ -1342,7 +1470,7 @@ function EditorTopbar({ canvasNodeRef }) {
                   title="Line style"
                   aria-label="Line style"
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
-                    lineStylePopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                    lineStylePopover.open ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   <LineStyleIcon />
@@ -1358,7 +1486,7 @@ function EditorTopbar({ canvasNodeRef }) {
                   title="Corner radius"
                   aria-label="Corner radius"
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
-                    cornerPopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                    cornerPopover.open ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                   }`}
                 >
                   <CornerRadiusIcon />
@@ -1379,7 +1507,7 @@ function EditorTopbar({ canvasNodeRef }) {
                     type="button"
                     onClick={() => setLineStyle('solid')}
                     className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                      currentLineStyle === 'solid' ? 'bg-surface-soft text-ink' : 'text-body'
+                      currentLineStyle === 'solid' ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                     }`}
                   >
                     Solid
@@ -1388,7 +1516,7 @@ function EditorTopbar({ canvasNodeRef }) {
                     type="button"
                     onClick={() => setLineStyle('dashed')}
                     className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                      currentLineStyle === 'dashed' ? 'bg-surface-soft text-ink' : 'text-body'
+                      currentLineStyle === 'dashed' ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                     }`}
                   >
                     Dashed
@@ -1397,7 +1525,7 @@ function EditorTopbar({ canvasNodeRef }) {
                     type="button"
                     onClick={() => setLineStyle('dotted')}
                     className={`block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                      currentLineStyle === 'dotted' ? 'bg-surface-soft text-ink' : 'text-body'
+                      currentLineStyle === 'dotted' ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                     }`}
                   >
                     Dotted
@@ -1434,7 +1562,7 @@ function EditorTopbar({ canvasNodeRef }) {
                     onBlur={() => dispatch({ type: 'DRAG_END' })}
                     title="Corner radius"
                     aria-label="Corner radius"
-                    className="h-1.5 min-w-0 flex-1 shrink-0 cursor-pointer accent-brand-purple"
+                    className="h-1.5 min-w-0 flex-1 shrink-0 cursor-pointer accent-ink"
                   />
                   <span className="w-6 shrink-0 text-right text-[12.5px] font-medium text-ink">
                     {currentCornerRadius}
@@ -1507,7 +1635,7 @@ function EditorTopbar({ canvasNodeRef }) {
                     title="Connector type"
                     aria-label="Connector type"
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
-                      connectorTypePopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                      connectorTypePopover.open ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                     }`}
                   >
                     <ConnectorTypeIcon type={currentConnectorType} />
@@ -1522,7 +1650,7 @@ function EditorTopbar({ canvasNodeRef }) {
                         title="Arrowhead at end"
                         aria-label="Arrowhead at end"
                         className={`flex h-8 w-8 items-center justify-center transition-colors hover:bg-surface-soft ${
-                          !currentStartArrow && currentEndArrow ? 'bg-surface-soft text-ink' : 'text-body'
+                          !currentStartArrow && currentEndArrow ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                         }`}
                       >
                         <ArrowHeadEndIcon />
@@ -1534,7 +1662,7 @@ function EditorTopbar({ canvasNodeRef }) {
                         title="Arrowhead at both ends"
                         aria-label="Arrowhead at both ends"
                         className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
-                          currentStartArrow && currentEndArrow ? 'bg-surface-soft text-ink' : 'text-body'
+                          currentStartArrow && currentEndArrow ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                         }`}
                       >
                         <ArrowHeadBothIcon />
@@ -1546,7 +1674,7 @@ function EditorTopbar({ canvasNodeRef }) {
                         title="No arrowheads"
                         aria-label="No arrowheads"
                         className={`flex h-8 w-8 items-center justify-center border-l border-line transition-colors hover:bg-surface-soft ${
-                          !currentStartArrow && !currentEndArrow ? 'bg-surface-soft text-ink' : 'text-body'
+                          !currentStartArrow && !currentEndArrow ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                         }`}
                       >
                         <ArrowHeadNoneIcon />
@@ -1569,7 +1697,7 @@ function EditorTopbar({ canvasNodeRef }) {
                           type="button"
                           onClick={() => setConnectorType(c.key)}
                           className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                            currentConnectorType === c.key ? 'bg-surface-soft text-ink' : 'text-body'
+                            currentConnectorType === c.key ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                           }`}
                         >
                           <ConnectorTypeIcon type={c.key} />
@@ -1595,7 +1723,7 @@ function EditorTopbar({ canvasNodeRef }) {
                 title="Opacity"
                 aria-label="Opacity"
                 className={`flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-line px-2 text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
-                  opacityPopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                  opacityPopover.open ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                 }`}
               >
                 <OpacityIcon />
@@ -1625,7 +1753,7 @@ function EditorTopbar({ canvasNodeRef }) {
                     onBlur={() => dispatch({ type: 'DRAG_END' })}
                     title="Opacity"
                     aria-label="Opacity"
-                    className="h-1.5 min-w-0 flex-1 shrink-0 cursor-pointer accent-brand-purple"
+                    className="h-1.5 min-w-0 flex-1 shrink-0 cursor-pointer accent-ink"
                   />
                   <span className="w-9 shrink-0 text-right text-[12.5px] font-medium text-ink">
                     {currentOpacity}%
@@ -1667,24 +1795,44 @@ function EditorTopbar({ canvasNodeRef }) {
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => dispatch({ type: 'BRING_TO_FRONT' })}
-                title="Bring to front"
-                aria-label="Bring to front"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
-              >
-                <BringToFrontIcon />
-              </button>
-              <button
-                type="button"
-                onClick={() => dispatch({ type: 'SEND_TO_BACK' })}
-                title="Send to back"
-                aria-label="Send to back"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
-              >
-                <SendToBackIcon />
-              </button>
+              <div className="flex shrink-0 items-center overflow-hidden rounded-md border border-line">
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'BRING_TO_FRONT' })}
+                  title="Bring to front (Ctrl+⇧])"
+                  aria-label="Bring to front"
+                  className="flex h-8 w-8 items-center justify-center text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                >
+                  <BringToFrontIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'BRING_FORWARD' })}
+                  title="Bring forward (Ctrl+])"
+                  aria-label="Bring forward"
+                  className="flex h-8 w-8 items-center justify-center border-l border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                >
+                  <BringForwardIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'SEND_BACKWARD' })}
+                  title="Send backward (Ctrl+[)"
+                  aria-label="Send backward"
+                  className="flex h-8 w-8 items-center justify-center border-l border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                >
+                  <SendBackwardIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'SEND_TO_BACK' })}
+                  title="Send to back (Ctrl+⇧[)"
+                  aria-label="Send to back"
+                  className="flex h-8 w-8 items-center justify-center border-l border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+                >
+                  <SendToBackIcon />
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'DUPLICATE_SELECTED' })}
@@ -1693,6 +1841,15 @@ function EditorTopbar({ canvasNodeRef }) {
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
               >
                 <DuplicateIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'TOGGLE_SHAPE_LOCK' })}
+                title={`${willLockSelection ? 'Lock' : 'Unlock'} (Ctrl+⇧L)`}
+                aria-label={willLockSelection ? 'Lock' : 'Unlock'}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line text-body transition-colors hover:bg-surface-soft hover:text-ink"
+              >
+                {willLockSelection ? <LockIcon /> : <UnlockIcon />}
               </button>
             </FormatGroup>
 
@@ -1711,7 +1868,7 @@ function EditorTopbar({ canvasNodeRef }) {
                     title="Align"
                     aria-label="Align"
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line transition-colors hover:bg-surface-soft ${
-                      alignPopover.open ? 'bg-surface-soft text-ink' : 'text-body'
+                      alignPopover.open ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
                     }`}
                   >
                     <AlignLeftIcon />
@@ -1723,7 +1880,7 @@ function EditorTopbar({ canvasNodeRef }) {
                   createPortal(
                     <div
                       ref={alignPanelRef}
-                      className="fixed z-30 grid w-40 grid-cols-3 gap-1 rounded-xl border border-line bg-white p-1.5 shadow-lg"
+                      className="fixed z-30 grid w-52 grid-cols-3 gap-1 rounded-xl border border-line bg-white p-1.5 shadow-lg"
                       style={alignPopover.pos}
                     >
                       <button
@@ -1779,6 +1936,35 @@ function EditorTopbar({ canvasNodeRef }) {
                         className="flex h-9 items-center justify-center rounded-md text-body transition-colors hover:bg-surface-soft hover:text-ink"
                       >
                         <AlignBottomIcon />
+                      </button>
+
+                      {/* Only meaningful past 2 shapes (a gap needs two
+                          neighbors to sit between) - shown disabled rather
+                          than hidden below that, same "explain, don't just
+                          remove" treatment as every other conditionally-
+                          disabled control in this toolbar. */}
+                      <div className="col-span-3 my-1 h-px bg-line" />
+                      <button
+                        type="button"
+                        disabled={!canDistribute}
+                        onClick={() => distributeSelected('horizontal')}
+                        title="Distribute horizontally"
+                        aria-label="Distribute horizontally"
+                        className="col-span-3 flex h-9 items-center justify-center gap-2 rounded-md text-[12px] font-medium text-body transition-colors hover:bg-surface-soft hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+                      >
+                        <DistributeHIcon />
+                        Distribute horizontally
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canDistribute}
+                        onClick={() => distributeSelected('vertical')}
+                        title="Distribute vertically"
+                        aria-label="Distribute vertically"
+                        className="col-span-3 flex h-9 items-center justify-center gap-2 rounded-md text-[12px] font-medium text-body transition-colors hover:bg-surface-soft hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+                      >
+                        <DistributeVIcon />
+                        Distribute vertically
                       </button>
                     </div>,
                     document.body,

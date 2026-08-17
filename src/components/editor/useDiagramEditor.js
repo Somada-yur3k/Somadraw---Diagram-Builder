@@ -8,7 +8,15 @@ import {
   DEFAULT_FILL_COLOR_BY_TYPE,
   clampOpacity,
 } from './shapeStyle'
-import { containerShapeTypes } from './shapeCatalog'
+import {
+  containerShapeTypes,
+  systemArchOwnShapeKeys,
+  systemArchNoBorderKeys,
+  systemArchShapes,
+  networkOwnShapeKeys,
+  networkNoBorderKeys,
+  networkShapes,
+} from './shapeCatalog'
 import { supabase } from '../../lib/supabaseClient'
 import { useDiagramChannel } from '../../lib/useDiagramChannel'
 
@@ -62,6 +70,8 @@ export function createBlankDiagramData() {
     arrowOrder: [],
     counters: { process: 0, store: 0 },
     showGrid: true,
+    commentThreads: {},
+    commentThreadOrder: [],
   }
 }
 
@@ -95,6 +105,30 @@ export const DEFAULT_SHAPE_SIZE = {
   swimlaneH1: { width: 400, height: 160 },
   swimlaneH2: { width: 400, height: 260 },
   erdTable: { width: 230, height: ERD_HEADER_HEIGHT + ERD_ROW_HEIGHT * ERD_STARTER_ROW_COUNT },
+  // System Architecture's ~55 shapes are all the same "icon + label" layout
+  // (see Shape.jsx's SystemArchNodeBody) - one shared size per look instead
+  // of hand-tuning each individually, the same way every other type above
+  // got its own bespoke dimensions for its own bespoke layout. The
+  // no-border look (a person/cylinder/cloud/... icon with nothing framing
+  // it - systemArchNoBorderKeys) gets a smaller box than the bordered-card
+  // look: without a border to visually fill that edge space, the same
+  // 148x96 box left a lot of empty margin floating around a small centered
+  // icon - shrinking the box is what actually closes that gap, since there
+  // was never any real padding value making it happen in the first place.
+  ...Object.fromEntries(
+    [...systemArchOwnShapeKeys].map((key) => [
+      key,
+      systemArchNoBorderKeys.has(key) ? { width: 104, height: 76 } : { width: 148, height: 96 },
+    ]),
+  ),
+  // Same "no-border look gets a smaller box" reasoning as System
+  // Architecture above, applied to Network Diagram's own shapes.
+  ...Object.fromEntries(
+    [...networkOwnShapeKeys].map((key) => [
+      key,
+      networkNoBorderKeys.has(key) ? { width: 104, height: 76 } : { width: 148, height: 96 },
+    ]),
+  ),
 }
 
 const DEFAULT_TEXT = {
@@ -119,6 +153,15 @@ const DEFAULT_TEXT = {
   umlDecision: 'Decision',
   state: 'State',
   erdTable: 'table_name',
+  // Same label shown in the picker doubles as the shape's own starting
+  // text - unlike e.g. umlClass (deliberately blank), there's no more
+  // useful default for "Firewall" or "Load Balancer" than its own name.
+  ...Object.fromEntries(
+    systemArchShapes
+      .filter((shape) => systemArchOwnShapeKeys.has(shape.key))
+      .map((shape) => [shape.key, shape.label]),
+  ),
+  ...Object.fromEntries(networkShapes.map((shape) => [shape.key, shape.label])),
 }
 
 // Swimlane lane headers (shape.lane1, lane2, ...) aren't a single `text`
@@ -255,6 +298,26 @@ function initState(initialData) {
     // drop; { vertical, horizontal } are each either null or a single
     // { x, y1, y2 } / { y, x1, x2 } line descriptor (see alignmentSnap.js).
     alignmentGuides: { vertical: null, horizontal: null },
+    // Pinned discussion threads (Figma-style) - persisted and undo-*exempt*
+    // (see historyReducer.js's contentChanged, which deliberately doesn't
+    // look at these two fields): resolving or deleting a thread isn't
+    // something a canvas Ctrl+Z should be able to revert, any more than it
+    // reverts someone else's chat message elsewhere. activeCommentThreadId
+    // (which thread's card is open) is transient UI state, same treatment
+    // as `selection` - not persisted, not undo-tracked, always starts
+    // closed each session.
+    commentThreads: saved?.commentThreads ?? {},
+    commentThreadOrder: saved?.commentThreadOrder ?? [],
+    activeCommentThreadId: null,
+    // A counter, not a boolean - EditorCanvas's own effect (which owns the
+    // wrapper DOM ref this needs to measure) watches this value change to
+    // know a fit was requested, and increments-not-toggles is what lets a
+    // second "Zoom to fit" click while nothing else changed still fire the
+    // effect again (a boolean flipped true->false->true across two renders
+    // could get batched into a single change, or miss firing if the effect
+    // hasn't re-subscribed yet). Transient view state, same treatment as
+    // viewport.zoom above - not persisted, not undo-tracked.
+    zoomFitRequestId: 0,
   }
 }
 
@@ -329,6 +392,13 @@ function reducer(state, action) {
       if (state.viewport.zoom === zoom) return state
       return { ...state, viewport: { ...state.viewport, zoom } }
     }
+
+    // Just a signal - see zoomFitRequestId's own comment in initState for
+    // why this is a counter, and EditorCanvas's own effect for what
+    // actually happens when it changes (that's the one place with a DOM
+    // ref to measure the visible viewport against).
+    case 'REQUEST_ZOOM_TO_FIT':
+      return { ...state, zoomFitRequestId: state.zoomFitRequestId + 1 }
 
     case 'TOGGLE_GRID':
       return { ...state, showGrid: !state.showGrid }
@@ -419,7 +489,7 @@ function reducer(state, action) {
 
     case 'MOVE_SHAPE': {
       const shape = state.shapes[action.id]
-      if (!shape) return state
+      if (!shape || shape.locked) return state
       const { x, y } = clampShapePosition(action.x, action.y)
       if (shape.x === x && shape.y === y) return state
       return {
@@ -433,7 +503,7 @@ function reducer(state, action) {
 
     case 'RESIZE_SHAPE': {
       const shape = state.shapes[action.id]
-      if (!shape) return state
+      if (!shape || shape.locked) return state
       const { x, y } = clampShapePosition(action.x, action.y)
       if (
         shape.x === x &&
@@ -464,7 +534,7 @@ function reducer(state, action) {
     // non-negative degrees if this value is read elsewhere later.
     case 'ROTATE_SHAPE': {
       const shape = state.shapes[action.id]
-      if (!shape) return state
+      if (!shape || shape.locked) return state
       if (shape.rotation === action.rotation) return state
       return {
         ...state,
@@ -798,6 +868,26 @@ function reducer(state, action) {
       }
     }
 
+    // Whether the shape renders its fill (light body tint, and any solid
+    // header bar - Process's badge, a swimlane's own lane headers, an ERD
+    // table's header) at all, independent of its border - which stays
+    // exactly as-is either way (see Shape.jsx's own showBackground/
+    // headerFill comment). Defaults true (background shown) when unset, so
+    // every shape saved before this field existed keeps looking exactly as
+    // it already did. Same field name/default convention as arrows'
+    // labelBackground (TOGGLE_ARROW_LABEL_BACKGROUND above).
+    case 'TOGGLE_SHAPE_BACKGROUND': {
+      const shape = state.shapes[action.id]
+      if (!shape) return state
+      return {
+        ...state,
+        shapes: {
+          ...state.shapes,
+          [action.id]: { ...shape, backgroundVisible: !(shape.backgroundVisible ?? true) },
+        },
+      }
+    }
+
     // The arrow's own line/stroke color - separate from SET_ARROW_TEXT_FORMAT's
     // textColor, which only ever colors the label text, never the line itself.
     case 'SET_ARROW_COLOR': {
@@ -936,18 +1026,27 @@ function reducer(state, action) {
         return { ...state, arrows, arrowOrder, selection: null }
       }
 
-      const ids = new Set(state.selection.ids)
+      // Locked shapes sit out of the delete, same as they sit out of
+      // move/resize/rotate - selecting a mix of locked and unlocked shapes
+      // and pressing Delete removes only the unlocked ones, leaving the
+      // locked ones (still) selected rather than silently blocking the
+      // whole delete or unlocking anything on the user's behalf.
+      const deletableIds = new Set(
+        [...state.selection.ids].filter((id) => !state.shapes[id]?.locked),
+      )
+      if (deletableIds.size === 0) return state
       const remainingShapes = { ...state.shapes }
-      for (const id of ids) delete remainingShapes[id]
-      const { arrows, arrowOrder } = removeArrowsForShapes(state, ids)
+      for (const id of deletableIds) delete remainingShapes[id]
+      const { arrows, arrowOrder } = removeArrowsForShapes(state, deletableIds)
+      const remainingSelectedIds = state.selection.ids.filter((id) => !deletableIds.has(id))
       return {
         ...state,
         shapes: remainingShapes,
-        shapeOrder: state.shapeOrder.filter((shapeId) => !ids.has(shapeId)),
+        shapeOrder: state.shapeOrder.filter((shapeId) => !deletableIds.has(shapeId)),
         arrows,
         arrowOrder,
-        selection: null,
-        pendingArrowSourceId: ids.has(state.pendingArrowSourceId)
+        selection: remainingSelectedIds.length > 0 ? { kind: 'shape', ids: remainingSelectedIds } : null,
+        pendingArrowSourceId: deletableIds.has(state.pendingArrowSourceId)
           ? null
           : state.pendingArrowSourceId,
       }
@@ -1048,6 +1147,90 @@ function reducer(state, action) {
       const rest = state.shapeOrder.filter((id) => !ids.has(id))
       const moved = state.shapeOrder.filter((id) => ids.has(id))
       return { ...state, shapeOrder: [...moved, ...rest] }
+    }
+
+    // Single-step reorder, unlike BRING_TO_FRONT/SEND_TO_BACK's jump to
+    // either end - each selected id swaps with its immediate non-selected
+    // neighbor in that direction, one position at a time. Walking the array
+    // back-to-front (forward) / front-to-back (backward) is what lets two
+    // adjacent selected shapes both move together, preserving their
+    // relative order, instead of the first swap immediately blocking the
+    // second (see the trace-through in this session's own design notes: an
+    // ordinary single forward pass over the array would let a selected id
+    // swap into a position another selected id already vacated on this
+    // same call, double-moving it).
+    case 'BRING_FORWARD': {
+      if (state.selection?.kind !== 'shape') return state
+      const ids = new Set(state.selection.ids)
+      const order = [...state.shapeOrder]
+      for (let i = order.length - 2; i >= 0; i--) {
+        if (ids.has(order[i]) && !ids.has(order[i + 1])) {
+          ;[order[i], order[i + 1]] = [order[i + 1], order[i]]
+        }
+      }
+      return { ...state, shapeOrder: order }
+    }
+
+    case 'SEND_BACKWARD': {
+      if (state.selection?.kind !== 'shape') return state
+      const ids = new Set(state.selection.ids)
+      const order = [...state.shapeOrder]
+      for (let i = 1; i < order.length; i++) {
+        if (ids.has(order[i]) && !ids.has(order[i - 1])) {
+          ;[order[i], order[i - 1]] = [order[i - 1], order[i]]
+        }
+      }
+      return { ...state, shapeOrder: order }
+    }
+
+    // Equalizes the *gaps* between consecutive shapes along one axis (not
+    // their centers) - first and last shape (by position) stay put, only
+    // the ones between them move, same "distribute spacing" convention
+    // Figma uses. Needs 3+ selected shapes: with exactly 2, there's only
+    // one gap already, nothing to equalize.
+    case 'DISTRIBUTE_SELECTED': {
+      if (state.selection?.kind !== 'shape' || state.selection.ids.length < 3) return state
+      const selected = state.selection.ids.map((id) => state.shapes[id])
+      const shapes = { ...state.shapes }
+      const isHorizontal = action.axis === 'horizontal'
+      const sorted = [...selected].sort((a, b) => (isHorizontal ? a.x - b.x : a.y - b.y))
+      const first = sorted[0]
+      const last = sorted[sorted.length - 1]
+      const sizeOf = (s) => (isHorizontal ? s.width : s.height)
+      const startOf = (s) => (isHorizontal ? s.x : s.y)
+      const span = startOf(last) + sizeOf(last) - startOf(first)
+      const totalSize = sorted.reduce((sum, s) => sum + sizeOf(s), 0)
+      const gap = (span - totalSize) / (sorted.length - 1)
+      let cursor = startOf(first) + sizeOf(first)
+      for (let i = 1; i < sorted.length - 1; i++) {
+        cursor += gap
+        const shape = sorted[i]
+        shapes[shape.id] = {
+          ...shape,
+          ...clampShapePosition(isHorizontal ? cursor : shape.x, isHorizontal ? shape.y : cursor),
+        }
+        cursor += sizeOf(shape)
+      }
+      return { ...state, shapes }
+    }
+
+    // Prevents accidental edits (drag/resize/rotate/delete) on a shape
+    // without hiding or otherwise removing it - see MOVE_SHAPE/
+    // RESIZE_SHAPE/ROTATE_SHAPE/DELETE_SELECTED below, each of which now
+    // skips a locked shape rather than applying the gesture to it.
+    // Toggling always flips *every* selected shape to the same next state
+    // (locking whichever aren't already locked) rather than each following
+    // its own previous value independently - same "one predictable
+    // outcome for the whole selection" reasoning TOGGLE_ARROW_LABEL_BACKGROUND
+    // and every other bulk toggle in this file already follows.
+    case 'TOGGLE_SHAPE_LOCK': {
+      if (state.selection?.kind !== 'shape' || state.selection.ids.length === 0) return state
+      const shouldLock = state.selection.ids.some((id) => !state.shapes[id]?.locked)
+      const shapes = { ...state.shapes }
+      for (const id of state.selection.ids) {
+        shapes[id] = { ...shapes[id], locked: shouldLock }
+      }
+      return { ...state, shapes }
     }
 
     // Works for every shape type (DFD/flowchart/use-case/basic/label alike) -
@@ -1195,6 +1378,115 @@ function reducer(state, action) {
         counters: { process: 0, store: 0 },
       }
 
+    // Clicking the canvas with the Comment tool active (see EditorCanvas's
+    // handleCanvasPointerDown) opens a local, undispatched composer first -
+    // this only fires once that composer is actually submitted with real
+    // content, same "no empty shape ever gets created" shape ADD_SHAPE
+    // itself doesn't need to worry about (a shape always has a default
+    // text, a comment has nothing worth keeping until someone types
+    // something). Switches back to the select tool on success, same
+    // "placing one thing uses up the tool" convention ADD_SHAPE already
+    // follows.
+    case 'ADD_COMMENT_THREAD': {
+      const content = action.content.trim()
+      if (!content) return state
+      const threadId = createId()
+      const message = {
+        id: createId(),
+        userId: action.userId,
+        email: action.email,
+        name: action.name,
+        picture: action.picture,
+        content,
+        createdAt: new Date().toISOString(),
+        editedAt: null,
+      }
+      return {
+        ...state,
+        tool: 'select',
+        commentThreads: {
+          ...state.commentThreads,
+          [threadId]: { id: threadId, x: action.x, y: action.y, resolved: false, messages: [message] },
+        },
+        commentThreadOrder: [...state.commentThreadOrder, threadId],
+        activeCommentThreadId: threadId,
+      }
+    }
+
+    case 'ADD_COMMENT_REPLY': {
+      const content = action.content.trim()
+      const thread = state.commentThreads[action.threadId]
+      if (!content || !thread) return state
+      const message = {
+        id: createId(),
+        userId: action.userId,
+        email: action.email,
+        name: action.name,
+        picture: action.picture,
+        content,
+        createdAt: new Date().toISOString(),
+        editedAt: null,
+      }
+      return {
+        ...state,
+        commentThreads: {
+          ...state.commentThreads,
+          [action.threadId]: { ...thread, messages: [...thread.messages, message] },
+        },
+      }
+    }
+
+    case 'EDIT_COMMENT_MESSAGE': {
+      const content = action.content.trim()
+      const thread = state.commentThreads[action.threadId]
+      if (!content || !thread) return state
+      const messages = thread.messages.map((message) =>
+        message.id === action.messageId
+          ? { ...message, content, editedAt: new Date().toISOString() }
+          : message,
+      )
+      return {
+        ...state,
+        commentThreads: { ...state.commentThreads, [action.threadId]: { ...thread, messages } },
+      }
+    }
+
+    // Toggle, not one-way - a resolved thread can still be reopened later
+    // (CommentThreadCard flips the menu label between "Resolve"/"Reopen"
+    // based on the thread's own current state), so nothing ever gets
+    // permanently stuck.
+    case 'TOGGLE_COMMENT_THREAD_RESOLVED': {
+      const thread = state.commentThreads[action.threadId]
+      if (!thread) return state
+      return {
+        ...state,
+        commentThreads: {
+          ...state.commentThreads,
+          [action.threadId]: { ...thread, resolved: !thread.resolved },
+        },
+      }
+    }
+
+    case 'DELETE_COMMENT_THREAD': {
+      if (!state.commentThreads[action.threadId]) return state
+      const commentThreads = { ...state.commentThreads }
+      delete commentThreads[action.threadId]
+      return {
+        ...state,
+        commentThreads,
+        commentThreadOrder: state.commentThreadOrder.filter((id) => id !== action.threadId),
+        activeCommentThreadId:
+          state.activeCommentThreadId === action.threadId ? null : state.activeCommentThreadId,
+      }
+    }
+
+    // Which single thread's card is expanded - opening one implicitly
+    // closes whatever else was open, same as this editor never shows two
+    // popovers at once elsewhere.
+    case 'SET_ACTIVE_COMMENT_THREAD':
+      if (state.activeCommentThreadId === action.threadId) return state
+      return { ...state, activeCommentThreadId: action.threadId }
+
     // No-op today — marks the point Phase 4's undo/redo history will snapshot on.
     case 'DRAG_END':
       return state
@@ -1220,6 +1512,7 @@ const READ_ONLY_ALLOWED_ACTIONS = new Set([
   'TOGGLE_SHAPE_SELECTION',
   'DESELECT',
   'SET_ZOOM',
+  'REQUEST_ZOOM_TO_FIT',
   'SET_HOVERED_SHAPE',
   'SET_ALIGNMENT_GUIDES',
   'CANCEL_PENDING_ARROW',
@@ -1227,6 +1520,13 @@ const READ_ONLY_ALLOWED_ACTIONS = new Set([
   'UNDO',
   'REDO',
   'DRAG_END',
+  // Opening/closing a thread's card is read-only navigation, same tier as
+  // SELECT above - a viewer can read every comment, just can't add, edit,
+  // resolve, or delete one (those all persist through the same diagrams.data
+  // column a viewer has no update policy for - see schema.sql - so letting
+  // the dispatch through here would just draft into a UI that silently
+  // never saves, worse than not allowing it).
+  'SET_ACTIVE_COMMENT_THREAD',
 ])
 
 function extractPersisted(state) {
@@ -1237,7 +1537,85 @@ function extractPersisted(state) {
     arrowOrder: state.arrowOrder,
     counters: state.counters,
     showGrid: state.showGrid,
+    commentThreads: state.commentThreads,
+    commentThreadOrder: state.commentThreadOrder,
   }
+}
+
+// Reference inequality (not a deep compare) is enough here - `baseline` and
+// `current` are always two `extractPersisted()` snapshots taken from this
+// same client's own reducer, which always gives a changed entry a new
+// object reference (immutable-update convention followed throughout
+// historyReducer.js) and leaves an untouched one's reference alone. Content
+// could theoretically differ despite a matching reference never happening,
+// or match despite a *different* reference in some rare no-op-edit case -
+// worst case that costs one redundant id in the diff, not a correctness bug.
+function diffIdMap(baseline, current) {
+  const changed = {}
+  let hasChanged = false
+  for (const id in current) {
+    if (baseline[id] !== current[id]) {
+      changed[id] = current[id]
+      hasChanged = true
+    }
+  }
+  const removed = []
+  for (const id in baseline) {
+    if (!(id in current)) removed.push(id)
+  }
+  return [hasChanged ? changed : {}, removed]
+}
+
+// What actually goes out over the realtime channel now - only the
+// shapes/arrows/comment-threads that changed since the last thing THIS
+// client broadcast, plus an explicit removed-ids list for each (an id
+// simply missing from `shapes` is ambiguous - untouched, or deleted? - so
+// deletions need their own signal). shapeOrder/arrowOrder/
+// commentThreadOrder/counters/showGrid are cheap (just id lists / small
+// values) and always sent whole, no need to diff those.
+//
+// `removedShapeIds`/`removedArrowIds`/`removedCommentThreadIds` being
+// *present* (even as `[]`) is what tells historyReducer.js's
+// mergeRemotePatch this is a diff, not a full snapshot - see its own
+// comment on why that distinction matters (a full DB row, applied on tab
+// refocus, has no such field and means something different: "this IS the
+// complete set, anything else is a deletion").
+function buildBroadcastDiff(baseline, current) {
+  const [shapes, removedShapeIds] = diffIdMap(baseline.shapes, current.shapes)
+  const [arrows, removedArrowIds] = diffIdMap(baseline.arrows, current.arrows)
+  const [commentThreads, removedCommentThreadIds] = diffIdMap(
+    baseline.commentThreads,
+    current.commentThreads,
+  )
+  return {
+    shapes,
+    removedShapeIds,
+    arrows,
+    removedArrowIds,
+    commentThreads,
+    removedCommentThreadIds,
+    shapeOrder: current.shapeOrder,
+    arrowOrder: current.arrowOrder,
+    commentThreadOrder: current.commentThreadOrder,
+    counters: current.counters,
+    showGrid: current.showGrid,
+  }
+}
+
+// Nothing actually changed content-wise - nothing worth sending. Comes up
+// whenever this tick's only "change" was absorbing a remote patch that just
+// got applied (see the suppressed branch below), which already brought
+// this client's own baseline up to date without this client itself having
+// anything new to report.
+function isEmptyBroadcastDiff(diff) {
+  return (
+    Object.keys(diff.shapes).length === 0 &&
+    diff.removedShapeIds.length === 0 &&
+    Object.keys(diff.arrows).length === 0 &&
+    diff.removedArrowIds.length === 0 &&
+    Object.keys(diff.commentThreads).length === 0 &&
+    diff.removedCommentThreadIds.length === 0
+  )
 }
 
 export function useDiagramEditor(diagramId, initialData, role = 'owner', email, name, picture) {
@@ -1277,7 +1655,9 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
     persistedNow.arrows !== lastPersisted.arrows ||
     persistedNow.arrowOrder !== lastPersisted.arrowOrder ||
     persistedNow.counters !== lastPersisted.counters ||
-    persistedNow.showGrid !== lastPersisted.showGrid
+    persistedNow.showGrid !== lastPersisted.showGrid ||
+    persistedNow.commentThreads !== lastPersisted.commentThreads ||
+    persistedNow.commentThreadOrder !== lastPersisted.commentThreadOrder
   if (persistedChanged) {
     setLastPersisted(persistedNow)
     // A viewer's own dispatch can never actually change these fields (see
@@ -1387,6 +1767,16 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
     }
   }, [diagramId, applyRemoteState, saveStatus])
 
+  // What THIS client last actually put on the wire (not just "the last state
+  // it had") - every diff broadcast below is computed against this, and it
+  // only ever advances at the moment content actually goes out (or, for a
+  // just-applied remote patch, at the moment it's absorbed - see the
+  // suppressed branch, which counts as "peers already know this" too even
+  // though this client didn't send it). Starts empty so the very first
+  // broadcast this client ever sends is naturally "everything is new,"
+  // equivalent to the old full-snapshot behavior for that one case.
+  const lastBroadcastPersistedRef = useRef({ shapes: {}, arrows: {}, commentThreads: {} })
+
   // A drag dispatches MOVE_SHAPE on every single pointermove - without this,
   // that meant one full-document broadcast per pointermove tick (30-60/sec
   // during a fast drag). Throttled here to leading-edge-immediate (so the
@@ -1394,27 +1784,47 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
   // that always flushes the *latest* queued payload once the window closes -
   // never just dropped, or the shape's true final position could sit un-sent
   // until the next unrelated edit.
+  //
+  // The diff itself is computed here, at actual send time - not up where
+  // scheduleBroadcast is called - deliberately. `throttle.pending` always
+  // holds the latest *full* persisted snapshot (overwriting an older one
+  // queued in the same window is safe, since the newer one is a complete
+  // superset). Diffing that against lastBroadcastPersistedRef only at the
+  // moment it's about to go out means a throttle window with several rapid
+  // local edits still produces exactly one diff covering everything since
+  // the last real send - computing the diff earlier (e.g. per-tick, against
+  // a baseline advanced on every tick) would let an edit from the middle of
+  // the window get silently dropped whenever a later one in the same window
+  // overwrote it.
   const BROADCAST_THROTTLE_MS = 50
   const broadcastThrottleRef = useRef({ lastSentAt: 0, timer: null, pending: null })
+  const flushBroadcast = useCallback(
+    (persistedNow) => {
+      const diff = buildBroadcastDiff(lastBroadcastPersistedRef.current, persistedNow)
+      lastBroadcastPersistedRef.current = persistedNow
+      if (!isEmptyBroadcastDiff(diff)) broadcastState(diff)
+    },
+    [broadcastState],
+  )
   const scheduleBroadcast = useCallback(
-    (payload) => {
+    (persistedNow) => {
       const throttle = broadcastThrottleRef.current
       const elapsed = Date.now() - throttle.lastSentAt
       if (elapsed >= BROADCAST_THROTTLE_MS) {
         throttle.lastSentAt = Date.now()
-        broadcastState(payload)
+        flushBroadcast(persistedNow)
         return
       }
-      throttle.pending = payload
+      throttle.pending = persistedNow
       if (throttle.timer) return
       throttle.timer = setTimeout(() => {
         throttle.timer = null
         throttle.lastSentAt = Date.now()
-        broadcastState(throttle.pending)
+        flushBroadcast(throttle.pending)
         throttle.pending = null
       }, BROADCAST_THROTTLE_MS - elapsed)
     },
-    [broadcastState],
+    [flushBroadcast],
   )
   useEffect(() => {
     const throttle = broadcastThrottleRef.current
@@ -1442,10 +1852,20 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
   useLayoutEffect(() => {
     if (suppressNextBroadcastRef.current) {
       suppressNextBroadcastRef.current = false
+      // This tick's only "change" was absorbing a remote patch, not a local
+      // edit - nothing of this client's own to send, but peers now
+      // effectively know this content (whoever sent it does, at least), so
+      // the next real diff this client sends shouldn't re-include it. Also
+      // brings a still-pending throttled send up to date, so if it does
+      // still fire, it correctly resolves to an empty (skipped) diff instead
+      // of re-sending a since-superseded local edit against a baseline
+      // that's already moved past it.
+      lastBroadcastPersistedRef.current = persistedNow
+      if (broadcastThrottleRef.current.timer) broadcastThrottleRef.current.pending = persistedNow
       return
     }
     if (readOnly) return
-    scheduleBroadcast(extractPersisted(state))
+    scheduleBroadcast(persistedNow)
     // Deliberately keyed on the individual persisted fields (like the save
     // effect below), not `state` itself - `state` also changes reference on
     // purely transient updates (selection, tool, hover), which would
@@ -1459,6 +1879,8 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
     state.arrowOrder,
     state.counters,
     state.showGrid,
+    state.commentThreads,
+    state.commentThreadOrder,
     scheduleBroadcast,
   ])
 
@@ -1545,6 +1967,8 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
     state.arrowOrder,
     state.counters,
     state.showGrid,
+    state.commentThreads,
+    state.commentThreadOrder,
     scheduleSave,
   ])
 

@@ -82,7 +82,7 @@ function ToggleSwitch({ checked, onChange, disabled }) {
       onClick={onChange}
       disabled={disabled}
       className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-        checked ? 'bg-brand-purple' : 'bg-line'
+        checked ? 'bg-brand-blue' : 'bg-line'
       }`}
     >
       <span

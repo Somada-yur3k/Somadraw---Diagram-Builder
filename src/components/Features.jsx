@@ -12,8 +12,8 @@ const features = [
     ),
   },
   {
-    title: 'Five diagram types, one canvas',
-    description: 'DFD, ERD, UML, flowchart, and use case diagrams — each with shapes that match real notation.',
+    title: 'Seven diagram types, one canvas',
+    description: 'DFD, ERD, UML, flowchart, use case, system architecture, and network diagrams — each with shapes that match real notation.',
     icon: (
       <>
         <rect x="3.5" y="4" width="7" height="5" rx="1.5" />
@@ -64,50 +64,53 @@ const features = [
 
 function Features() {
   return (
-    <section id="features" className="relative border-t border-line bg-white/70 py-20 sm:py-28">
+    <section id="features" className="relative scroll-mt-24 border-t border-line bg-white/70 py-20 sm:py-28">
       <div className="container">
-        <div className="flex max-w-xl flex-col items-start gap-3 text-left">
-          <span className="text-[13.5px] font-medium text-brand-blue">
-            Built for teams
-          </span>
-          <h2 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            Everything your team needs to diagram together
-          </h2>
-          <p className="text-[17px] leading-relaxed text-soft">
-            A distraction-free canvas that adapts to DFDs, ERDs, UML,
-            flowcharts, and use case diagrams — accurate to real notation,
-            with teammates in sync the whole time.
-          </p>
-        </div>
+        <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_2fr] lg:items-start lg:gap-16">
+          <div className="flex max-w-xl flex-col items-start gap-3 text-left">
+            <span className="text-[12.5px] font-semibold uppercase tracking-wide text-brand-blue">
+              Built for teams
+            </span>
+            <h2 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+              Everything your team needs to diagram together
+            </h2>
+            <p className="text-[17px] leading-relaxed text-soft">
+              A distraction-free canvas that adapts to DFDs, ERDs, UML,
+              flowcharts, use case, system architecture, and network diagrams
+              — accurate to real notation, with teammates in sync the whole
+              time.
+            </p>
+          </div>
 
-        <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature) => (
-            <div
-              key={feature.title}
-              className="group rounded-2xl border border-line bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
-            >
-              <span className="gradient-bg inline-flex h-11 w-11 items-center justify-center rounded-xl shadow-sm">
-                <svg
-                  width="19"
-                  height="19"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="white"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  {feature.icon}
-                </svg>
-              </span>
-              <h3 className="mt-4 text-[17px] font-semibold text-ink">
-                {feature.title}
-              </h3>
-              <p className="mt-2 text-[14.5px] leading-relaxed text-soft">
-                {feature.description}
-              </p>
-            </div>
-          ))}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map((feature) => (
+              <div
+                key={feature.title}
+                className="group rounded-2xl border border-line bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md"
+              >
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-brand-blue/10">
+                  <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--color-brand-blue)"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    {feature.icon}
+                  </svg>
+                </span>
+                <h3 className="mt-4 text-[17px] font-semibold text-ink">
+                  {feature.title}
+                </h3>
+                <p className="mt-2 text-[14.5px] leading-relaxed text-soft">
+                  {feature.description}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

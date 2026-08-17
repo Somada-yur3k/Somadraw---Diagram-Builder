@@ -61,6 +61,7 @@ function DiagramWorkspace() {
       initialData={result.diagram.data}
       diagramName={result.diagram.name}
       role={result.diagram.role}
+      userId={user.id}
       email={email}
       name={name}
       picture={picture}

@@ -1,6 +1,6 @@
 // Human-readable time deltas shared by the two feedback-adjacent views that
 // each need one: MonitorPage counts elapsed time up ("5m ago"),
-// DeveloperInfoView's feedback cooldown counts remaining time down ("5
+// SettingsModal's feedback cooldown counts remaining time down ("5
 // minutes"). Kept as two functions (not one parameterized one) since their
 // ranges genuinely differ - elapsed time is unbounded and falls back to a
 // calendar date past a week, while the cooldown is always under an hour and

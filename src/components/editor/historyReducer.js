@@ -44,19 +44,49 @@ function contentEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
-function mergeById(current, incoming) {
-  let allSame = Object.keys(current).length === Object.keys(incoming).length
-  const next = {}
-  for (const id in incoming) {
-    const currentEntry = current[id]
-    if (currentEntry && contentEqual(currentEntry, incoming[id])) {
-      next[id] = currentEntry
-    } else {
-      next[id] = incoming[id]
-      allSame = false
+// `removedIds` tells apart the two shapes a patch's id-map can arrive in:
+// - undefined: `changed` IS the complete set (a full DB row - the
+//   visibility-change refetch in useDiagramEditor.js applies one of these
+//   verbatim). Anything in `current` missing from `changed` was deleted.
+// - an array (even `[]`): `changed` is only what's DIFFERENT since this
+//   sender's last broadcast (see buildBroadcastDiff there) - everything
+//   else in `current` is untouched and stays exactly as it is, and only the
+//   ids explicitly listed here were removed.
+function applyIdPatch(current, changed, removedIds) {
+  if (removedIds === undefined) {
+    if (!changed) return current
+    let allSame = Object.keys(current).length === Object.keys(changed).length
+    const next = {}
+    for (const id in changed) {
+      const currentEntry = current[id]
+      if (currentEntry && contentEqual(currentEntry, changed[id])) {
+        next[id] = currentEntry
+      } else {
+        next[id] = changed[id]
+        allSame = false
+      }
+    }
+    return allSame ? current : next
+  }
+
+  if ((!changed || Object.keys(changed).length === 0) && removedIds.length === 0) return current
+  let same = true
+  const next = { ...current }
+  if (changed) {
+    for (const id in changed) {
+      const currentEntry = current[id]
+      if (currentEntry && contentEqual(currentEntry, changed[id])) continue
+      next[id] = changed[id]
+      same = false
     }
   }
-  return allSame ? current : next
+  for (const id of removedIds) {
+    if (id in next) {
+      delete next[id]
+      same = false
+    }
+  }
+  return same ? current : next
 }
 
 function mergeOrder(current, incoming) {
@@ -66,19 +96,38 @@ function mergeOrder(current, incoming) {
   return incoming
 }
 
-// patch.shapes/arrows/shapeOrder/arrowOrder are always present on a patch
-// built from extractPersisted (useDiagramEditor.js) - but a patch can also
-// come straight from an older diagram row's saved `data` column (the
-// visibility-change refetch in useDiagramEditor.js), which predates a field
-// that's since been added, so this stays defensive rather than assuming.
+// A patch is either a diff broadcast from another client's own
+// buildBroadcastDiff (useDiagramEditor.js) - only changed shapes/arrows/
+// comment-threads plus explicit removed-id lists - or a full DB row applied
+// wholesale (the visibility-change refetch), which predates the
+// removed-id-list fields entirely. applyIdPatch's own `removedIds`
+// parameter is what tells those two apart; everything else here (order
+// arrays, counters, showGrid) is small enough to always send/apply whole
+// either way, so those fields alone can't tell a diff from a full snapshot
+// the way the id-maps can.
 function mergeRemotePatch(present, patch) {
-  return {
-    ...patch,
-    ...(patch.shapes ? { shapes: mergeById(present.shapes, patch.shapes) } : null),
-    ...(patch.arrows ? { arrows: mergeById(present.arrows, patch.arrows) } : null),
-    ...(patch.shapeOrder ? { shapeOrder: mergeOrder(present.shapeOrder, patch.shapeOrder) } : null),
-    ...(patch.arrowOrder ? { arrowOrder: mergeOrder(present.arrowOrder, patch.arrowOrder) } : null),
+  const result = {}
+  if (patch.shapes || patch.removedShapeIds) {
+    result.shapes = applyIdPatch(present.shapes, patch.shapes, patch.removedShapeIds)
   }
+  if (patch.arrows || patch.removedArrowIds) {
+    result.arrows = applyIdPatch(present.arrows, patch.arrows, patch.removedArrowIds)
+  }
+  if (patch.shapeOrder) result.shapeOrder = mergeOrder(present.shapeOrder, patch.shapeOrder)
+  if (patch.arrowOrder) result.arrowOrder = mergeOrder(present.arrowOrder, patch.arrowOrder)
+  if ('counters' in patch) result.counters = patch.counters
+  if ('showGrid' in patch) result.showGrid = patch.showGrid
+  if (patch.commentThreads || patch.removedCommentThreadIds) {
+    result.commentThreads = applyIdPatch(
+      present.commentThreads,
+      patch.commentThreads,
+      patch.removedCommentThreadIds,
+    )
+  }
+  if (patch.commentThreadOrder) {
+    result.commentThreadOrder = mergeOrder(present.commentThreadOrder, patch.commentThreadOrder)
+  }
+  return result
 }
 
 function contentChanged(prev, next) {
