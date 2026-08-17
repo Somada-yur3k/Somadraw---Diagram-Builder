@@ -466,3 +466,164 @@ begin
     order by u.created_at desc;
 end;
 $$;
+
+-- Backs the Monitor Dashboard's "Diagrams created" stat tile and "Diagram
+-- created" activity feed rows - same shape as admin_list_users() above
+-- (security definer, re-checks OWNER_EMAIL server-side, logs an
+-- unauthorized_admin_call on abuse), needed because "select own diagrams"
+-- RLS on diagrams (top of this file) would otherwise only ever show the
+-- owner's own diagrams here too, same as a regular user.
+create function admin_list_diagrams()
+returns table (id uuid, name text, user_email text, created_at timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.jwt() ->> 'email' <> 'eurikasomada@gmail.com' then
+    insert into security_events (event_type, user_id, email, detail)
+    values ('unauthorized_admin_call', auth.uid(), auth.jwt() ->> 'email', 'Called admin_list_diagrams()');
+    raise exception 'Not authorized' using errcode = 'AU001';
+  end if;
+  return query
+    select d.id, d.name, u.email::text, d.created_at
+    from diagrams d
+    join auth.users u on u.id = d.user_id
+    order by d.created_at desc;
+end;
+$$;
+
+grant execute on function admin_list_diagrams() to authenticated;
+
+-- Admin-authored announcements shown on the public /updates page and the
+-- workspace's own "what's new" banner - replaces the old hardcoded UPDATES
+-- array in src/lib/updates.js now that the owner can post/remove these
+-- from the Monitor Dashboard directly, instead of needing a code change +
+-- deploy for every new entry.
+create table announcements (
+  id uuid primary key default gen_random_uuid(),
+  type text not null check (type in ('new', 'improved', 'fix')),
+  title text not null,
+  description text not null,
+  created_at timestamptz not null default now()
+);
+
+create index announcements_created_at_idx on announcements (created_at desc);
+
+alter table announcements enable row level security;
+
+-- Readable by anyone, signed in or not - same as the rest of the public
+-- site (docs/help/updates pages don't require a session either).
+create policy "anyone can view announcements" on announcements for select using (true);
+-- Only the owner can post or remove one - same email check as "owner can
+-- delete feedback" above (this app has exactly one owner, not a role/table).
+create policy "owner can insert announcements" on announcements for insert
+  with check (auth.jwt() ->> 'email' = 'eurikasomada@gmail.com');
+create policy "owner can delete announcements" on announcements for delete
+  using (auth.jwt() ->> 'email' = 'eurikasomada@gmail.com');
+
+-- Seeds the table with the real entries that used to live in the hardcoded
+-- UPDATES array, so /updates doesn't start out empty the first time this
+-- migration runs. Safe to skip/delete individual rows afterward - this is
+-- a one-time seed, not something the app re-runs.
+insert into announcements (type, title, description, created_at) values
+  ('new', 'System Architecture & Network diagrams', 'Added two new diagram types: System Architecture, for mapping app/cloud infrastructure, and Network, for wiring, routers, and connectivity - each with its own shape library.', '2026-08-17T00:00:00Z'),
+  ('fix', 'ERD table fixes', 'Fixed ERD table layout issues and reduced excess whitespace when exporting diagrams.', '2026-08-12T00:00:00Z'),
+  ('improved', 'Arrow & label styling', 'Refined arrow and label colors, and added width/height controls for shapes.', '2026-08-11T00:00:00Z'),
+  ('new', 'Multi-row arrow support', 'Arrows can now connect to a specific row within a multi-row shape.', '2026-08-03T00:00:00Z'),
+  ('new', 'ERD diagrams & monitoring dashboard', 'Added ERD diagram support, plus an improved security and monitoring dashboard.', '2026-08-02T00:00:00Z'),
+  ('new', 'Rotate & align tools', 'Added shape rotation and alignment tools to the editor.', '2026-07-31T00:00:00Z'),
+  ('new', 'UML diagrams & starred diagrams', 'Added UML diagram support, the ability to star diagrams, and dashed border styling.', '2026-07-30T00:00:00Z'),
+  ('fix', 'PDF & PNG export fixes', 'Fixed issues with PDF and PNG export in the editor.', '2026-07-29T00:00:00Z'),
+  ('new', 'Real-time collaboration', 'Diagrams now sync live between everyone editing them together.', '2026-07-28T00:00:00Z'),
+  ('new', 'Use Case diagrams & feedback', 'Added Use Case diagram support and an in-app feedback form.', '2026-07-26T00:00:00Z');
+
+-- Lets a signed-in user delete their own account - the self-service
+-- counterpart to ManageAccountTab's "Delete Account" button, which used to
+-- just explain this wasn't possible yet. security definer runs this as
+-- the function's own owner (same mechanism admin_list_users()/
+-- admin_list_diagrams() above already use to reach auth.users - a table
+-- regular signed-in roles have no direct grants on), so a plain client
+-- call can do this without this client-side app ever needing to hold the
+-- service-role key that would otherwise require. Scoped to auth.uid()
+-- only, never a passed-in id, so there's no way to point this at anyone
+-- else's account. Deleting straight from auth.users (not just this app's
+-- own tables) cascades through every "on delete cascade" FK already on
+-- diagrams/feedback/diagram_collaborators/diagram_stars above, and
+-- through Supabase's own session/refresh-token tables too - not just a
+-- login removed, everything that belonged to this account goes with it.
+create function delete_own_account() returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from auth.users where id = auth.uid();
+end;
+$$;
+
+grant execute on function delete_own_account() to authenticated;
+
+-- Resolves Supabase's Security Advisor warnings:
+--   - "Function Search Path Mutable" on set_updated_at()/
+--     enforce_diagram_update_scope() - neither pinned search_path before,
+--     so both are redefined here with the same `set search_path = public`
+--     every other function in this file already uses (stops a malicious
+--     search_path swap from resolving an unqualified reference to
+--     something other than the intended one).
+--   - "Public Can Execute SECURITY DEFINER Function" on every security
+--     definer function below - Postgres grants EXECUTE to the PUBLIC
+--     pseudo-role by default on every new function, and anon inherits
+--     from PUBLIC, so each of these was directly callable by a fully
+--     unauthenticated caller even though every one already re-checks
+--     auth.uid()/auth.jwt() (or is scoped to auth.uid()) internally.
+--     Revoking PUBLIC and granting only to `authenticated` closes that off
+--     at the permission layer too, instead of relying solely on each
+--     function's own internal check.
+create or replace function set_updated_at() returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin new.updated_at = now(); return new; end;
+$$;
+
+create or replace function enforce_diagram_update_scope() returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if auth.uid() <> old.user_id then
+    if new.name is distinct from old.name
+      or new.user_id is distinct from old.user_id
+      or new.share_enabled is distinct from old.share_enabled
+      or new.share_role is distinct from old.share_role
+    then
+      raise exception 'Collaborators can only edit diagram content.' using errcode = 'SC001';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+-- is_diagram_owner()/diagram_collaborator_role() are called from inside
+-- RLS policy expressions on diagrams/diagram_collaborators/
+-- realtime.messages, evaluated as the querying role - authenticated still
+-- needs its own explicit EXECUTE grant for those policies to keep
+-- resolving, unlike the functions below which authenticated only ever
+-- calls directly (and which already have their own explicit grant from
+-- when each was created above).
+revoke execute on function is_diagram_owner(uuid) from public;
+grant execute on function is_diagram_owner(uuid) to authenticated;
+
+revoke execute on function diagram_collaborator_role(uuid) from public;
+grant execute on function diagram_collaborator_role(uuid) to authenticated;
+
+revoke execute on function join_shared_diagram(uuid) from public;
+revoke execute on function admin_list_users() from public;
+revoke execute on function admin_list_diagrams() from public;
+revoke execute on function delete_own_account() from public;
+
+-- Trigger-only, never called directly - Postgres fires a trigger
+-- regardless of the triggering role's own EXECUTE grants on the trigger
+-- function, so nothing needs re-granting here after this revoke.
+revoke execute on function feedback_rate_limit() from public;
