@@ -3,7 +3,11 @@ import { supabase } from './supabaseClient'
 
 const STATE_EVENT = 'state'
 const CURSOR_EVENT = 'cursor'
-const CURSOR_THROTTLE_MS = 50
+// Was 50ms (up to 20 broadcasts/sec per actively-moving cursor) - that
+// alone pushed the Supabase Realtime Messages quota to 116% of the Free
+// plan's monthly limit with only ~29 MAU, so this is throttled down to
+// roughly a third of that rate. Still reads as live/smooth at 120ms.
+const CURSOR_THROTTLE_MS = 120
 
 // Distinct, legible-on-white hues - picked from, not generated, so nobody
 // ever gets an accidentally near-invisible or two people an accidentally
