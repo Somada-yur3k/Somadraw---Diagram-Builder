@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation } from 'react-router'
 import { useDiagramEditorContext } from './DiagramEditorContext'
 import { usePopoverState } from '../../lib/usePopoverState'
 import ShapeIcon from './ShapeIcon'
@@ -265,7 +266,14 @@ function EditorSidebar() {
   // needing their own positioned popover.
   const [activeDiagramType, setActiveDiagramType] = useState(null)
   const activeDiagramTypeGroup = diagramTypeGroups.find((group) => group.key === activeDiagramType) ?? null
-  const [diagramPickerOpen, setDiagramPickerOpen] = useState(false)
+  // A diagram created via an announcement's "Try it now" (see
+  // AnnouncementBanner) arrives with `openDiagramType` in router state -
+  // captured once via the lazy useState initializer (not read again on
+  // every location change) so opening and then closing the picker doesn't
+  // keep reopening it on re-render.
+  const location = useLocation()
+  const [initialOpenDiagramType] = useState(() => location.state?.openDiagramType ?? null)
+  const [diagramPickerOpen, setDiagramPickerOpen] = useState(() => Boolean(initialOpenDiagramType))
 
   // toolKey is optional - DiagramTypePicker passes one when the user clicked
   // a specific element tile (not just the category), pre-selecting that
@@ -571,6 +579,7 @@ function EditorSidebar() {
       {diagramPickerOpen && (
         <DiagramTypePicker
           activeDiagramType={activeDiagramType}
+          initialPreviewKey={initialOpenDiagramType}
           onSelect={chooseDiagramType}
           onClose={() => setDiagramPickerOpen(false)}
         />

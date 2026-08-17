@@ -24,12 +24,21 @@ function readDismissed() {
   }
 }
 
-function AnnouncementBanner() {
+// Only the current latest "new diagram type" announcement gets a "Try it
+// now" shortcut straight into the editor - matched by title since
+// announcements has no diagram-type column of its own. Anything else (a
+// fix, an improvement, or a future announcement not about a new diagram
+// type) falls back to the plain "See what's new" link to /updates.
+const TRY_IT_TITLE = 'System Architecture & Network diagrams'
+
+function AnnouncementBanner({ onTryDiagramType }) {
   const { announcements } = useAnnouncements()
   const latest = announcements[0]
   const [dismissedTitle, setDismissedTitle] = useState(readDismissed)
 
   if (!latest || dismissedTitle === latest.title) return null
+
+  const canTryIt = latest.title === TRY_IT_TITLE && Boolean(onTryDiagramType)
 
   const handleDismiss = () => {
     setDismissedTitle(latest.title)
@@ -47,12 +56,22 @@ function AnnouncementBanner() {
         {UPDATE_BADGE_LABEL[latest.type]}
       </span>
       <p className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{latest.title}</p>
-      <Link
-        to="/updates"
-        className="shrink-0 text-[13px] font-medium text-brand-blue hover:underline"
-      >
-        See what's new
-      </Link>
+      {canTryIt ? (
+        <button
+          type="button"
+          onClick={onTryDiagramType}
+          className="shrink-0 text-[13px] font-medium text-brand-blue hover:underline"
+        >
+          Try it now
+        </button>
+      ) : (
+        <Link
+          to="/updates"
+          className="shrink-0 text-[13px] font-medium text-brand-blue hover:underline"
+        >
+          See what's new
+        </Link>
+      )}
       <button
         type="button"
         onClick={handleDismiss}

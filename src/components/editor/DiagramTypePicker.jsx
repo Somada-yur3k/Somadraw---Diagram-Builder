@@ -16,13 +16,15 @@ function SearchIcon() {
 // deserves the same room to browse as Settings does, not a cramped
 // dropdown, now that it also has to show every element inside each
 // category rather than just a flat list of five names.
-function DiagramTypePicker({ activeDiagramType, onSelect, onClose }) {
+function DiagramTypePicker({ activeDiagramType, initialPreviewKey, onSelect, onClose }) {
   const [query, setQuery] = useState('')
   // Which category the right pane is currently showing - independent of
   // activeDiagramType (the diagram actually applied to the sidebar/canvas)
   // so browsing other categories here is just a preview, with nothing
-  // committed until onSelect actually fires.
-  const [previewKey, setPreviewKey] = useState(activeDiagramType ?? diagramTypeGroups[0].key)
+  // committed until onSelect actually fires. initialPreviewKey lets a caller
+  // (e.g. "Try it now" on a new-diagram-type announcement) open straight to
+  // that type's preview without it counting as already chosen.
+  const [previewKey, setPreviewKey] = useState(activeDiagramType ?? initialPreviewKey ?? diagramTypeGroups[0].key)
   const previewGroup =
     diagramTypeGroups.find((group) => group.key === previewKey) ?? diagramTypeGroups[0]
   // [{ category, shapes }] - category is null for every diagram type
