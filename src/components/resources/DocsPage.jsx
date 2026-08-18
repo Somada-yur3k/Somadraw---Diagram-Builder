@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import SiteHeader from './SiteHeader'
-import ShapeIcon from './editor/ShapeIcon'
-import { diagramTypeGroups } from './editor/shapeCatalog'
-import { SHORTCUT_GROUPS } from '../lib/shortcuts'
+import SiteHeader from '../workspace/SiteHeader'
+import ShapeIcon from '../editor/ShapeIcon'
+import { diagramTypeGroups } from '../editor/shapeCatalog'
+import { SHORTCUT_GROUPS } from '../../lib/shortcuts'
 
 // One real, accurate sentence per diagram type - shapeCatalog.js itself has
 // no description field (just label/shapes/iconKey), so this stays a small

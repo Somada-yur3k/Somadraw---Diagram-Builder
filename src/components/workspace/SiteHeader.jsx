@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import somadrawLogo from '../assets/SomadrawLogo.png'
+import somadrawLogo from '../../assets/SomadrawLogo.png'
 import ResourcesMenu from './ResourcesMenu'
 
 // Shared by every page outside the landing page's own Navbar.jsx (DocsPage,

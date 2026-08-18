@@ -7,6 +7,7 @@ import EditorCanvas from './EditorCanvas'
 import ShareButton from './ShareButton'
 import ActiveUsersStack from './ActiveUsersStack'
 import FloatingShapePreview from './FloatingShapePreview'
+import SaveIndicator from './SaveIndicator'
 
 function SidebarToggleIcon({ collapsed }) {
   return (
@@ -36,6 +37,15 @@ function Editor({ diagramId, initialData, diagramName, role = 'owner', userId, e
   // never gets one regardless of this, since they have nothing to place/draw
   // with it in the first place.
   const [showSidebar, setShowSidebar] = useState(true)
+  // Personal view preference, not diagram content - deliberately local-only
+  // (not state.showGrid's "persisted, synced to every collaborator" model),
+  // same reasoning as showSidebar above: hiding comment pins to declutter
+  // your own view while presenting shouldn't also hide them for teammates
+  // still discussing on the same diagram. Lives here (not EditorCanvas,
+  // where CommentLayer actually renders) because the toggle button itself
+  // is in EditorTopbar - a sibling, not a parent/child, of EditorCanvas -
+  // so both need it from this shared context.
+  const [showComments, setShowComments] = useState(true)
 
   return (
     <DiagramEditorContext.Provider
@@ -58,6 +68,8 @@ function Editor({ diagramId, initialData, diagramName, role = 'owner', userId, e
         activeUsers,
         updateCursor,
         clearCursor,
+        showComments,
+        toggleShowComments: () => setShowComments((visible) => !visible),
       }}
     >
       <div className="flex min-h-0 flex-1">
@@ -97,6 +109,15 @@ function Editor({ diagramId, initialData, diagramName, role = 'owner', userId, e
           <div className="fixed right-4 bottom-4 z-20 flex items-center gap-2">
             <ActiveUsersStack />
             {role === 'owner' && <ShareButton />}
+          </div>
+          {/* absolute (not fixed like the bottom-right group above) - this
+              sits inside the canvas column specifically, which starts after
+              the Tools sidebar. fixed would anchor to the whole viewport's
+              left edge instead, overlapping that sidebar whenever it's
+              shown - there's no equivalent sidebar on the right for
+              ActiveUsersStack/ShareButton to collide with. */}
+          <div className="absolute bottom-4 left-4 z-20">
+            <SaveIndicator status={saveStatus} />
           </div>
         </div>
       </div>

@@ -9,6 +9,37 @@ import { useDiagramEditorContext } from './DiagramEditorContext'
 import { containsPoint } from './arrowRouting'
 import { readClipboard, MIN_ZOOM, MAX_ZOOM } from './useDiagramEditor'
 
+// One CSS background per state.gridStyle value (see EditorTopbar's grid
+// style picker) - all built from plain gradients (no image assets), scaled
+// by the same `zoom` the dot grid already was, so every style stays a
+// constant on-screen size regardless of how far zoomed in/out the diagram
+// is instead of the pattern itself scaling with content.
+function gridBackgroundStyle(gridStyle, zoom) {
+  if (gridStyle === 'lines') {
+    const line = 'color-mix(in srgb, var(--color-ink) 12%, transparent) 1px, transparent 1px'
+    return {
+      backgroundImage: `linear-gradient(to right, ${line}), linear-gradient(to bottom, ${line})`,
+      backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+    }
+  }
+  if (gridStyle === 'graphPaper') {
+    // Minor lines every cell (same 20px unit as 'lines'), major lines every
+    // 5 cells and more visible - the classic engineering-graph-paper look.
+    const major = 'color-mix(in srgb, var(--color-ink) 22%, transparent) 1px, transparent 1px'
+    const minor = 'color-mix(in srgb, var(--color-ink) 10%, transparent) 1px, transparent 1px'
+    return {
+      backgroundImage: `linear-gradient(to right, ${major}), linear-gradient(to bottom, ${major}), linear-gradient(to right, ${minor}), linear-gradient(to bottom, ${minor})`,
+      backgroundSize: `${100 * zoom}px ${100 * zoom}px, ${100 * zoom}px ${100 * zoom}px, ${20 * zoom}px ${20 * zoom}px, ${20 * zoom}px ${20 * zoom}px`,
+    }
+  }
+  // 'dots' - the original/default look.
+  return {
+    backgroundImage:
+      'radial-gradient(circle, color-mix(in srgb, var(--color-ink) 18%, transparent) 1.25px, transparent 1.25px)',
+    backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+  }
+}
+
 export const CANVAS_WIDTH = 2400
 export const CANVAS_HEIGHT = 1400
 // How much clear room to always keep past the furthest shape edge, as a
@@ -144,7 +175,7 @@ function AlignmentGuideLines({ guides }) {
 // component's own internal canvasRef, so the export code can read the live
 // canvas without EditorCanvas needing to know anything about exporting.
 function EditorCanvas({ canvasNodeRef }) {
-  const { state, dispatch, readOnly, isDragging, cursors, updateCursor, clearCursor } =
+  const { state, dispatch, readOnly, isDragging, cursors, updateCursor, clearCursor, showComments } =
     useDiagramEditorContext()
   const zoom = state.viewport.zoom
   // Lets each memoized <Shape> read fresh state (e.g. other selected shapes'
@@ -631,13 +662,7 @@ function EditorCanvas({ canvasNodeRef }) {
         style={{
           width: renderWidth * zoom,
           height: renderHeight * zoom,
-          ...(state.showGrid
-            ? {
-                backgroundImage:
-                  'radial-gradient(circle, color-mix(in srgb, var(--color-ink) 18%, transparent) 1.25px, transparent 1.25px)',
-                backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
-              }
-            : {}),
+          ...(state.showGrid ? gridBackgroundStyle(state.gridStyle, zoom) : {}),
         }}
       >
         <div
@@ -701,14 +726,16 @@ function EditorCanvas({ canvasNodeRef }) {
           })}
           <ArrowLabels />
           <ArrowCardinalityPickers />
-          <CommentLayer
-            zoom={zoom}
-            pendingCommentPos={pendingCommentPos}
-            onCancelPending={() => {
-              setPendingCommentPos(null)
-              if (state.tool === 'comment') dispatch({ type: 'SET_TOOL', tool: 'select' })
-            }}
-          />
+          {showComments && (
+            <CommentLayer
+              zoom={zoom}
+              pendingCommentPos={pendingCommentPos}
+              onCancelPending={() => {
+                setPendingCommentPos(null)
+                if (state.tool === 'comment') dispatch({ type: 'SET_TOOL', tool: 'select' })
+              }}
+            />
+          )}
           <AlignmentGuideLines guides={state.alignmentGuides} />
           {cursors.map((cursor) => (
             <CursorMarker

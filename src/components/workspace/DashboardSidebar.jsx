@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
-import somadrawLogo from '../assets/SomadrawLogo.png'
-import { supabase } from '../lib/supabaseClient'
-import { createBlankDiagramData } from './editor/useDiagramEditor'
-import { getDisplayUser } from '../lib/userDisplay'
+import somadrawLogo from '../../assets/SomadrawLogo.png'
+import { supabase } from '../../lib/supabaseClient'
+import { createBlankDiagramData } from '../editor/useDiagramEditor'
+import { getDisplayUser } from '../../lib/userDisplay'
 import SettingsModal from './SettingsModal'
 
 function Logo() {

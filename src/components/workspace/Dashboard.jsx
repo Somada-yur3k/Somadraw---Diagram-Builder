@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router'
 import DashboardSidebar from './DashboardSidebar'
-import UsernamePrompt from './UsernamePrompt'
-import { useOnlineUsers } from '../lib/usePresence'
+import UsernamePrompt from '../auth/UsernamePrompt'
+import { useOnlineUsers } from '../../lib/usePresence'
 
 function MenuIcon() {
   return (

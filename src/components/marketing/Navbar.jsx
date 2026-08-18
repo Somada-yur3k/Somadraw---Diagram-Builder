@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import somadrawLogo from '../assets/SomadrawLogo.png'
-import ResourcesMenu from './ResourcesMenu'
+import somadrawLogo from '../../assets/SomadrawLogo.png'
+import ResourcesMenu from '../workspace/ResourcesMenu'
 
 const links = [
   { href: '#features', label: 'Features' },

@@ -25,6 +25,13 @@ export const DEFAULT_CORNER_RADIUS_BY_TYPE = {
   actor: 0,
   usecase: 0,
   boundary: 8,
+  // Same pre-themed container frame as boundary above, just one per common
+  // architecture layer role instead of one generic gray box - see Shape.jsx's
+  // LAYER_CONTAINER_STYLE.
+  sysClientLayer: 8,
+  sysApplicationLayer: 8,
+  sysDataLayer: 8,
+  sysExternalLayer: 8,
   umlClass: 8,
   activity: 28,
   umlDecision: 0,
@@ -90,6 +97,14 @@ export const DEFAULT_FILL_COLOR_BY_TYPE = {
   actor: '#6366f1',
   usecase: '#0ea5e9',
   boundary: '#94a3b8',
+  // Matches each layer's own Tailwind accent in Shape.jsx's
+  // LAYER_CONTAINER_STYLE (blue/violet/emerald/orange) so the color-picker
+  // swatch shown before a user ever customizes one of these starts on the
+  // same color it's already rendering with, not an unrelated default.
+  sysClientLayer: '#3b82f6',
+  sysApplicationLayer: '#8b5cf6',
+  sysDataLayer: '#10b981',
+  sysExternalLayer: '#f97316',
   umlClass: '#64748b',
   activity: '#10b981',
   umlDecision: '#f59e0b',

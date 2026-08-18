@@ -290,31 +290,38 @@ function CommentThreadCard({ thread, zoom, currentUser, dispatch, onClose }) {
 
   return (
     <ZoomLocked zoom={zoom} x={thread.x} y={thread.y}>
-      <div
-        ref={cardRef}
-        data-export-hidden
-        onPointerDown={(event) => event.stopPropagation()}
-        className="w-80 -translate-y-2 translate-x-3 overflow-hidden rounded-xl border border-line bg-white shadow-xl"
-      >
-        <div className="flex max-h-80 flex-col gap-3 overflow-y-auto p-3">
-          {thread.messages.map((message, index) => (
-            <div key={message.id} className={index === 0 ? '' : 'border-t border-line pt-3'}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <MessageRow
-                    message={message}
-                    isOwn={!currentUser.readOnly && message.userId === currentUser.userId}
-                    isEditing={editingMessageId === message.id}
-                    onStartEdit={() => setEditingMessageId(message.id)}
-                    onSaveEdit={(content) => {
-                      dispatch({ type: 'EDIT_COMMENT_MESSAGE', threadId: thread.id, messageId: message.id, content })
-                      setEditingMessageId(null)
-                    }}
-                    onCancelEdit={() => setEditingMessageId(null)}
-                  />
-                </div>
-                {index === 0 && !currentUser.readOnly && (
-                  <div className="relative shrink-0">
+      {/* relative + inline-block: the shared positioning root for both the
+          card and its Resolve/Delete panel below, sized to just the card's
+          own width (not a full-width block) so the panel's `left-full` below
+          lands immediately past the card's actual right edge rather than
+          off in space. The -translate-y-2/translate-x-3 offset (pin-relative
+          placement) lives here now, not on the card div itself, so the
+          panel - a sibling, not a descendant - shifts together with the
+          card instead of being positioned from the card's pre-offset spot. */}
+      <div ref={cardRef} className="relative inline-block -translate-y-2 translate-x-3">
+        <div
+          data-export-hidden
+          onPointerDown={(event) => event.stopPropagation()}
+          className="w-80 overflow-hidden rounded-xl border border-line bg-white shadow-xl"
+        >
+          <div className="flex max-h-80 flex-col gap-3 overflow-y-auto p-3">
+            {thread.messages.map((message, index) => (
+              <div key={message.id} className={index === 0 ? '' : 'border-t border-line pt-3'}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <MessageRow
+                      message={message}
+                      isOwn={!currentUser.readOnly && message.userId === currentUser.userId}
+                      isEditing={editingMessageId === message.id}
+                      onStartEdit={() => setEditingMessageId(message.id)}
+                      onSaveEdit={(content) => {
+                        dispatch({ type: 'EDIT_COMMENT_MESSAGE', threadId: thread.id, messageId: message.id, content })
+                        setEditingMessageId(null)
+                      }}
+                      onCancelEdit={() => setEditingMessageId(null)}
+                    />
+                  </div>
+                  {index === 0 && !currentUser.readOnly && (
                     <button
                       ref={menuRef}
                       type="button"
@@ -322,72 +329,84 @@ function CommentThreadCard({ thread, zoom, currentUser, dispatch, onClose }) {
                       aria-label="Thread options"
                       aria-haspopup="true"
                       aria-expanded={menuOpen}
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-soft transition-colors hover:bg-surface-soft hover:text-ink"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-soft transition-colors hover:bg-surface-soft hover:text-ink"
                     >
                       <MoreIcon />
                     </button>
-                    {menuOpen && (
-                      <div className="absolute right-0 top-7 z-10 w-44 rounded-lg border border-line bg-white p-1 shadow-lg">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            dispatch({ type: 'TOGGLE_COMMENT_THREAD_RESOLVED', threadId: thread.id })
-                            setMenuOpen(false)
-                          }}
-                          className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium text-ink hover:bg-surface-soft"
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <CheckIcon />
-                            {thread.resolved ? 'Reopen Thread' : 'Resolve Thread'}
-                          </span>
-                          <span className="text-[10.5px] text-soft">Alt R</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            dispatch({ type: 'DELETE_COMMENT_THREAD', threadId: thread.id })
-                            setMenuOpen(false)
-                          }}
-                          className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium text-rose-600 hover:bg-rose-50"
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <TrashIcon />
-                            Delete Thread
-                          </span>
-                          <span className="text-[10.5px] text-soft">Alt D</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
+            ))}
+          </div>
+
+          {!currentUser.readOnly && (
+            <div className="flex items-center gap-2 border-t border-line bg-surface-soft/60 p-2.5">
+              <Avatar picture={currentUser.picture} name={currentUser.name} size={22} />
+              <input
+                value={reply}
+                onChange={(event) => setReply(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                    event.preventDefault()
+                    submitReply()
+                  }
+                }}
+                placeholder="Reply… (Ctrl+↵ to submit)"
+                className="min-w-0 flex-1 rounded-full border border-line bg-white px-3 py-1.5 text-[12.5px] text-ink outline-none placeholder:text-soft"
+              />
+              <button
+                type="button"
+                onClick={submitReply}
+                disabled={!reply.trim()}
+                aria-label="Send reply"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-blue text-white transition-opacity disabled:opacity-40"
+              >
+                <SendIcon />
+              </button>
             </div>
-          ))}
+          )}
         </div>
 
-        {!currentUser.readOnly && (
-          <div className="flex items-center gap-2 border-t border-line bg-surface-soft/60 p-2.5">
-            <Avatar picture={currentUser.picture} name={currentUser.name} size={22} />
-            <input
-              value={reply}
-              onChange={(event) => setReply(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-                  event.preventDefault()
-                  submitReply()
-                }
-              }}
-              placeholder="Reply… (Ctrl+↵ to submit)"
-              className="min-w-0 flex-1 rounded-full border border-line bg-white px-3 py-1.5 text-[12.5px] text-ink outline-none placeholder:text-soft"
-            />
+        {/* Resolve/Delete Thread - its own floating panel beside the card
+            (left-full = flush with the card's right edge, plus ml-2 for a
+            visible gap), not a dropdown nested inside/overlapping the
+            card's own corner. Needs its own stopPropagation for the same
+            reason the card div above has one - without it, a click here
+            would bubble to the document-level "click outside closes the
+            card" listener and dismiss the whole thread mid-click. */}
+        {menuOpen && (
+          <div
+            data-export-hidden
+            onPointerDown={(event) => event.stopPropagation()}
+            className="absolute top-0 left-full z-10 ml-2 w-44 rounded-lg border border-line bg-white p-1 shadow-lg"
+          >
             <button
               type="button"
-              onClick={submitReply}
-              disabled={!reply.trim()}
-              aria-label="Send reply"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-blue text-white transition-opacity disabled:opacity-40"
+              onClick={() => {
+                dispatch({ type: 'TOGGLE_COMMENT_THREAD_RESOLVED', threadId: thread.id })
+                setMenuOpen(false)
+              }}
+              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium text-ink hover:bg-surface-soft"
             >
-              <SendIcon />
+              <span className="flex items-center gap-1.5">
+                <CheckIcon />
+                {thread.resolved ? 'Reopen Thread' : 'Resolve Thread'}
+              </span>
+              <span className="text-[10.5px] text-soft">Alt R</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                dispatch({ type: 'DELETE_COMMENT_THREAD', threadId: thread.id })
+                setMenuOpen(false)
+              }}
+              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium text-rose-600 hover:bg-rose-50"
+            >
+              <span className="flex items-center gap-1.5">
+                <TrashIcon />
+                Delete Thread
+              </span>
+              <span className="text-[10.5px] text-soft">Alt D</span>
             </button>
           </div>
         )}

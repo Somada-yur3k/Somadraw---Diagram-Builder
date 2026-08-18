@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import SiteHeader from './SiteHeader'
-import { UPDATE_BADGE_LABEL, UPDATE_BADGE_STYLE, useAnnouncements } from '../lib/updates'
+import SiteHeader from '../workspace/SiteHeader'
+import { UPDATE_BADGE_LABEL, UPDATE_BADGE_STYLE, useAnnouncements } from '../../lib/updates'
 
 const FILTERS = [
   { key: 'all', label: 'All updates' },

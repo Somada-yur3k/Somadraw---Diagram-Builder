@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import somadrawLogo from '../assets/SomadrawLogo.png'
-import { supabase } from '../lib/supabaseClient'
-import { OWNER_EMAIL } from '../lib/ownerEmail'
-import { formatElapsed } from '../lib/timeFormat'
-import { useOnlineUsers } from '../lib/usePresence'
-import { getDisplayUser } from '../lib/userDisplay'
-import { UPDATE_BADGE_LABEL, UPDATE_BADGE_STYLE } from '../lib/updates'
-import LoadingScreen from './LoadingScreen'
+import somadrawLogo from '../../assets/SomadrawLogo.png'
+import { supabase } from '../../lib/supabaseClient'
+import { OWNER_EMAIL } from '../../lib/ownerEmail'
+import { formatElapsed } from '../../lib/timeFormat'
+import { useOnlineUsers } from '../../lib/usePresence'
+import { getDisplayUser } from '../../lib/userDisplay'
+import { UPDATE_BADGE_LABEL, UPDATE_BADGE_STYLE } from '../../lib/updates'
+import LoadingScreen from '../workspace/LoadingScreen'
 
 // This page is deliberately its own standalone HTML entry (monitor.html /
 // src/monitor-main.jsx), not a route inside App.jsx's own <Routes> - so

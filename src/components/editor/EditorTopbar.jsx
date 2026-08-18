@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { usePopoverState } from '../../lib/usePopoverState'
 import { useDiagramEditorContext } from './DiagramEditorContext'
-import { MIN_ZOOM, MAX_ZOOM } from './useDiagramEditor'
+import { MIN_ZOOM, MAX_ZOOM, GRID_STYLES } from './useDiagramEditor'
 import { ZOOM_STEP } from './EditorCanvas'
 import { MIN_W as MIN_SHAPE_WIDTH, MIN_H as MIN_SHAPE_HEIGHT } from './ShapeHandles'
 import ColorPickerButton from './ColorPickerButton'
@@ -23,7 +23,7 @@ import {
   MAX_OPACITY,
 } from './shapeStyle'
 import { exportDiagramToPdf, exportDiagramToPng } from './diagramExport'
-import LoadingScreen from '../LoadingScreen'
+import LoadingScreen from '../workspace/LoadingScreen'
 
 const CLEAR_LOADING_MS = 900
 // Matches --color-soft (index.css) - the line color an arrow renders with
@@ -96,6 +96,58 @@ function GridIcon() {
       <rect x="13.5" y="3.5" width="7" height="7" rx="1" />
       <rect x="3.5" y="13.5" width="7" height="7" rx="1" />
       <rect x="13.5" y="13.5" width="7" height="7" rx="1" />
+    </svg>
+  )
+}
+
+const GRID_STYLE_LABEL = { dots: 'Dots', lines: 'Lines', graphPaper: 'Graph Paper' }
+
+// Small preview matching what EditorCanvas's gridBackgroundStyle actually
+// draws for each state.gridStyle value - used both on the dropdown trigger
+// (shows the currently-picked style at a glance) and on each option row in
+// the panel below.
+function GridStyleIcon({ style }) {
+  if (style === 'lines') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
+        <path d="M9 3v18M15 3v18M3 9h18M3 15h18" />
+      </svg>
+    )
+  }
+  if (style === 'graphPaper') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="shrink-0">
+        <rect x="3" y="3" width="18" height="18" strokeWidth="2" />
+        <path d="M9 3v18M15 3v18M3 9h18M3 15h18" strokeWidth="1" opacity="0.55" />
+      </svg>
+    )
+  }
+  // 'dots'
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="shrink-0">
+      <circle cx="6" cy="6" r="1.6" />
+      <circle cx="12" cy="6" r="1.6" />
+      <circle cx="18" cy="6" r="1.6" />
+      <circle cx="6" cy="12" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="18" cy="12" r="1.6" />
+      <circle cx="6" cy="18" r="1.6" />
+      <circle cx="12" cy="18" r="1.6" />
+      <circle cx="18" cy="18" r="1.6" />
+    </svg>
+  )
+}
+
+// Filled when comments are showing, outline-only (plus a strikethrough)
+// when hidden - same "the icon itself reflects current state" convention
+// as the Format tab's Bold/Italic/Underline toggles, since RibbonButton
+// itself has no separate active/pressed styling for a plain Home-tab toggle
+// the way Grid's own button doesn't either.
+function CommentToggleIcon({ active }) {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4h16v12H8l-4 4V4Z" fill={active ? 'currentColor' : 'none'} fillOpacity={active ? 0.15 : 0} />
+      {!active && <line x1="3" y1="21" x2="21" y2="3" />}
     </svg>
   )
 }
@@ -609,21 +661,9 @@ function ClearConfirmDialog({ onCancel, onConfirm }) {
   )
 }
 
-function SaveStatus({ status }) {
-  if (status === 'saving') {
-    return <span className="shrink-0 whitespace-nowrap px-1.5 text-[12px] font-medium text-soft">Saving…</span>
-  }
-  if (status === 'error') {
-    return <span className="shrink-0 whitespace-nowrap px-1.5 text-[12px] font-medium text-rose-600">Save failed</span>
-  }
-  // Deliberately silent for 'saved' - a permanent "Saved" label is just
-  // noise once autosave is the norm; only surface state that needs
-  // attention (in progress, or failed).
-  return null
-}
-
 function EditorTopbar({ canvasNodeRef }) {
-  const { state, dispatch, diagramName, canUndo, canRedo, saveStatus, readOnly } = useDiagramEditorContext()
+  const { state, dispatch, diagramName, canUndo, canRedo, readOnly, showComments, toggleShowComments } =
+    useDiagramEditorContext()
   const zoom = state.viewport.zoom
   const [confirmingClear, setConfirmingClear] = useState(false)
   const [clearing, setClearing] = useState(false)
@@ -901,6 +941,10 @@ function EditorTopbar({ canvasNodeRef }) {
   const zoomPanelRef = useRef(null)
   const zoomPopover = usePopoverState(zoomTriggerRef, zoomPanelRef)
 
+  const gridStyleTriggerRef = useRef(null)
+  const gridStylePanelRef = useRef(null)
+  const gridStylePopover = usePopoverState(gridStyleTriggerRef, gridStylePanelRef)
+
   // Switching the selection (a different shape/arrow, or none) while a
   // format popover is open would otherwise leave it open and silently
   // retargeted to whatever's newly selected - close it so it only ever
@@ -1051,6 +1095,33 @@ function EditorTopbar({ canvasNodeRef }) {
               onClick={() => dispatch({ type: 'TOGGLE_GRID' })}
               title={state.showGrid ? 'Hide grid' : 'Show grid'}
             />
+            {/* Which pattern the grid above draws as, not just on/off -
+                a compact chevron trigger (matches the Zoom % control's own
+                shape) rather than a second RibbonButton, since this is a
+                sub-choice of Grid, not a peer action. Not disabled while
+                showGrid is off - picking a style ahead of turning the grid
+                back on is harmless and one less thing to sequence. */}
+            <button
+              ref={gridStyleTriggerRef}
+              type="button"
+              onClick={gridStylePopover.toggle}
+              aria-haspopup="true"
+              aria-expanded={gridStylePopover.open}
+              title="Grid style"
+              aria-label="Grid style"
+              className={`flex h-8 shrink-0 items-center gap-1 self-center rounded-md border border-line px-1.5 text-body transition-colors hover:bg-surface-soft ${
+                gridStylePopover.open ? 'bg-surface-soft' : ''
+              }`}
+            >
+              <GridStyleIcon style={state.gridStyle} />
+              <ChevronDownIcon />
+            </button>
+            <RibbonButton
+              icon={<CommentToggleIcon active={showComments} />}
+              label="Comments"
+              onClick={toggleShowComments}
+              title={showComments ? 'Hide comments' : 'Show comments'}
+            />
 
             {/* Zoom out/in flank the existing percent-and-presets trigger -
                 that dropdown alone had no fine-grained step control, only
@@ -1131,6 +1202,35 @@ function EditorTopbar({ canvasNodeRef }) {
                   }`}
                 >
                   {percent}%
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
+
+        {activeTab === 'home' &&
+          gridStylePopover.open &&
+          gridStylePopover.pos &&
+          createPortal(
+            <div
+              ref={gridStylePanelRef}
+              className="fixed z-30 w-40 -translate-x-1/2 rounded-xl border border-line bg-white p-1 shadow-lg"
+              style={{ left: gridStylePopover.pos.left, top: gridStylePopover.pos.top }}
+            >
+              {GRID_STYLES.map((styleKey) => (
+                <button
+                  key={styleKey}
+                  type="button"
+                  onClick={() => {
+                    dispatch({ type: 'SET_GRID_STYLE', style: styleKey })
+                    gridStylePopover.close()
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px] font-medium transition-colors hover:bg-surface-soft ${
+                    state.gridStyle === styleKey ? 'bg-brand-blue/10 text-brand-blue' : 'text-body'
+                  }`}
+                >
+                  <GridStyleIcon style={styleKey} />
+                  {GRID_STYLE_LABEL[styleKey]}
                 </button>
               ))}
             </div>,
@@ -1995,8 +2095,6 @@ function EditorTopbar({ canvasNodeRef }) {
             Select a shape or arrow to format it.
           </p>
         )}
-
-        <SaveStatus status={saveStatus} />
       </div>
 
       {confirmingClear && (

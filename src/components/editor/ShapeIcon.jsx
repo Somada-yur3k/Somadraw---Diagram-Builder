@@ -2,6 +2,17 @@ import { SystemArchIcon } from './systemArchIcons'
 import { NetworkIcon } from './networkIcons'
 import { systemArchOwnShapeKeys, networkOwnShapeKeys } from './shapeCatalog'
 
+// Mirrors Shape.jsx's own LAYER_CONTAINER_STYLE (border/background there,
+// just the icon's own color needed here) - kept as a separate, smaller
+// lookup since this file only ever needs the tint, not the full frame
+// styling.
+const LAYER_CONTAINER_ICON = {
+  sysClientLayer: { icon: 'sysBrowser', color: 'text-blue-600', bg: 'bg-blue-50' },
+  sysApplicationLayer: { icon: 'sysAppServer', color: 'text-violet-600', bg: 'bg-violet-50' },
+  sysDataLayer: { icon: 'sysDatabase', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  sysExternalLayer: { icon: 'sysCloudService', color: 'text-orange-600', bg: 'bg-orange-50' },
+}
+
 // Small mini-swatch representing a shape type - shared by EditorSidebar's
 // tool buttons and FloatingShapePreview's drag ghost, so both ever show the
 // exact same icon for a given tool key.
@@ -66,6 +77,14 @@ function ShapeIcon({ toolKey }) {
   }
   if (toolKey === 'boundary') {
     return <span className="h-3.5 w-5 shrink-0 rounded-[3px] border-2 border-slate-400/60 bg-slate-400/10" />
+  }
+  if (LAYER_CONTAINER_ICON[toolKey]) {
+    const layer = LAYER_CONTAINER_ICON[toolKey]
+    return (
+      <span className={`flex h-4 w-5 shrink-0 items-center justify-center rounded-[3px] ${layer.bg}`}>
+        <SystemArchIcon type={layer.icon} size={11} className={layer.color} />
+      </span>
+    )
   }
   if (toolKey === 'umlClass') {
     return (

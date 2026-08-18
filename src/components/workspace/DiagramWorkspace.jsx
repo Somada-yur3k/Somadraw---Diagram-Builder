@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useOutletContext, useParams } from 'react-router'
-import { supabase } from '../lib/supabaseClient'
-import { getDisplayUser } from '../lib/userDisplay'
+import { supabase } from '../../lib/supabaseClient'
+import { getDisplayUser } from '../../lib/userDisplay'
 import LoadingScreen from './LoadingScreen'
-import Editor from './editor/Editor'
+import Editor from '../editor/Editor'
 
 // Supabase reads are async, unlike the old synchronous sessionStorage read -
 // this component owns the fetch-and-wait so useDiagramEditor itself can stay

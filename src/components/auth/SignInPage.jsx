@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
-import somadrawLogo from '../assets/SomadrawLogo.png'
-import GoogleGlyph from './GoogleGlyph'
-import DfdMockup from './DfdMockup'
+import somadrawLogo from '../../assets/SomadrawLogo.png'
+import GoogleGlyph from '../marketing/GoogleGlyph'
+import DfdMockup from '../marketing/DfdMockup'
 
 const CHECKLIST = [
   'Private workspace — only you see your diagrams',

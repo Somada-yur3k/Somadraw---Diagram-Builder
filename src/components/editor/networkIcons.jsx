@@ -414,7 +414,8 @@ const NETWORK_ICONS = {
     </>
   ),
 
-  // Documentation & Annotations
+  // Documentation & Containers (Zone/Boundary/Group reuses the existing
+  // System Boundary shape - see shapeCatalog.js's own comment)
   netStickyNote: (
     <>
       <path d="M4 4h13l3 3v13H4V4Z" />

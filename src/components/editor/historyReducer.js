@@ -102,7 +102,7 @@ function mergeOrder(current, incoming) {
 // wholesale (the visibility-change refetch), which predates the
 // removed-id-list fields entirely. applyIdPatch's own `removedIds`
 // parameter is what tells those two apart; everything else here (order
-// arrays, counters, showGrid) is small enough to always send/apply whole
+// arrays, counters, showGrid, gridStyle) is small enough to always send/apply whole
 // either way, so those fields alone can't tell a diff from a full snapshot
 // the way the id-maps can.
 function mergeRemotePatch(present, patch) {
@@ -117,6 +117,7 @@ function mergeRemotePatch(present, patch) {
   if (patch.arrowOrder) result.arrowOrder = mergeOrder(present.arrowOrder, patch.arrowOrder)
   if ('counters' in patch) result.counters = patch.counters
   if ('showGrid' in patch) result.showGrid = patch.showGrid
+  if ('gridStyle' in patch) result.gridStyle = patch.gridStyle
   if (patch.commentThreads || patch.removedCommentThreadIds) {
     result.commentThreads = applyIdPatch(
       present.commentThreads,

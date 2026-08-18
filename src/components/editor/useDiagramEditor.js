@@ -70,10 +70,16 @@ export function createBlankDiagramData() {
     arrowOrder: [],
     counters: { process: 0, store: 0 },
     showGrid: true,
+    gridStyle: 'dots',
     commentThreads: {},
     commentThreadOrder: [],
   }
 }
+
+// Which visual pattern the grid background renders as when state.showGrid
+// is on - see EditorCanvas.jsx's own gridBackgroundStyle for what each one
+// actually draws.
+export const GRID_STYLES = ['dots', 'lines', 'graphPaper']
 
 export const DEFAULT_SHAPE_SIZE = {
   entity: { width: 160, height: 64 },
@@ -92,6 +98,10 @@ export const DEFAULT_SHAPE_SIZE = {
   actor: { width: 90, height: 120 },
   usecase: { width: 170, height: 90 },
   boundary: { width: 280, height: 200 },
+  sysClientLayer: { width: 280, height: 200 },
+  sysApplicationLayer: { width: 280, height: 200 },
+  sysDataLayer: { width: 280, height: 200 },
+  sysExternalLayer: { width: 280, height: 200 },
   umlClass: { width: 200, height: 140 },
   activity: { width: 170, height: 64 },
   umlDecision: { width: 170, height: 110 },
@@ -148,6 +158,10 @@ const DEFAULT_TEXT = {
   actor: 'Actor',
   usecase: 'Use case',
   boundary: 'System',
+  sysClientLayer: 'Client Layer',
+  sysApplicationLayer: 'Application Layer',
+  sysDataLayer: 'Data Layer',
+  sysExternalLayer: 'External Services',
   umlClass: 'ClassName',
   activity: 'Activity',
   umlDecision: 'Decision',
@@ -287,10 +301,11 @@ function initState(initialData) {
     clipboard: null,
     counters: saved?.counters ?? { process: 0, store: 0 },
     // View preferences below are intentionally split on persistence/undo:
-    // showGrid is a real user preference (persisted, not undo-tracked).
-    // viewport.zoom is a momentary viewport position (neither persisted nor
-    // undo-tracked - always resets to 1 on reload).
+    // showGrid/gridStyle are real user preferences (persisted, not
+    // undo-tracked). viewport.zoom is a momentary viewport position (neither
+    // persisted nor undo-tracked - always resets to 1 on reload).
     showGrid: saved?.showGrid ?? true,
+    gridStyle: saved?.gridStyle ?? 'dots',
     viewport: { zoom: 1 },
     // Smart alignment guides shown while dragging a shape - same treatment
     // as hoveredShapeId above (transient UI state, not persisted, not
@@ -402,6 +417,9 @@ function reducer(state, action) {
 
     case 'TOGGLE_GRID':
       return { ...state, showGrid: !state.showGrid }
+
+    case 'SET_GRID_STYLE':
+      return { ...state, gridStyle: action.style }
 
     case 'ADD_SHAPE': {
       const size = DEFAULT_SHAPE_SIZE[action.shapeType]
@@ -1135,7 +1153,17 @@ function reducer(state, action) {
     // any other "bring to front / send to back" tool.
     case 'BRING_TO_FRONT': {
       if (state.selection?.kind !== 'shape') return state
-      const ids = new Set(state.selection.ids)
+      // A container (system boundary, swimlane, Layer Container) must stay
+      // behind every other shape, same invariant ADD_SHAPE enforces at
+      // creation - bringing one to the front would paint its own frame/tint
+      // over whatever's placed inside it instead of framing it. Any
+      // container id in the selection is silently left in place rather than
+      // blocking the whole action; non-container ids in the same (possibly
+      // mixed) selection still move normally.
+      const ids = new Set(
+        [...state.selection.ids].filter((id) => !containerShapeTypes.has(state.shapes[id]?.type)),
+      )
+      if (ids.size === 0) return state
       const rest = state.shapeOrder.filter((id) => !ids.has(id))
       const moved = state.shapeOrder.filter((id) => ids.has(id))
       return { ...state, shapeOrder: [...rest, ...moved] }
@@ -1161,7 +1189,13 @@ function reducer(state, action) {
     // same call, double-moving it).
     case 'BRING_FORWARD': {
       if (state.selection?.kind !== 'shape') return state
-      const ids = new Set(state.selection.ids)
+      // Same container-stays-behind reasoning as BRING_TO_FRONT above -
+      // a container id never swaps forward past a neighbor, so it can't
+      // creep in front of its own children one step at a time either.
+      const ids = new Set(
+        [...state.selection.ids].filter((id) => !containerShapeTypes.has(state.shapes[id]?.type)),
+      )
+      if (ids.size === 0) return state
       const order = [...state.shapeOrder]
       for (let i = order.length - 2; i >= 0; i--) {
         if (ids.has(order[i]) && !ids.has(order[i + 1])) {
@@ -1517,6 +1551,7 @@ const READ_ONLY_ALLOWED_ACTIONS = new Set([
   'SET_ALIGNMENT_GUIDES',
   'CANCEL_PENDING_ARROW',
   'TOGGLE_GRID',
+  'SET_GRID_STYLE',
   'UNDO',
   'REDO',
   'DRAG_END',
@@ -1537,6 +1572,7 @@ function extractPersisted(state) {
     arrowOrder: state.arrowOrder,
     counters: state.counters,
     showGrid: state.showGrid,
+    gridStyle: state.gridStyle,
     commentThreads: state.commentThreads,
     commentThreadOrder: state.commentThreadOrder,
   }
@@ -1571,8 +1607,8 @@ function diffIdMap(baseline, current) {
 // client broadcast, plus an explicit removed-ids list for each (an id
 // simply missing from `shapes` is ambiguous - untouched, or deleted? - so
 // deletions need their own signal). shapeOrder/arrowOrder/
-// commentThreadOrder/counters/showGrid are cheap (just id lists / small
-// values) and always sent whole, no need to diff those.
+// commentThreadOrder/counters/showGrid/gridStyle are cheap (just id lists /
+// small values) and always sent whole, no need to diff those.
 //
 // `removedShapeIds`/`removedArrowIds`/`removedCommentThreadIds` being
 // *present* (even as `[]`) is what tells historyReducer.js's
@@ -1599,6 +1635,7 @@ function buildBroadcastDiff(baseline, current) {
     commentThreadOrder: current.commentThreadOrder,
     counters: current.counters,
     showGrid: current.showGrid,
+    gridStyle: current.gridStyle,
   }
 }
 
@@ -1656,6 +1693,7 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
     persistedNow.arrowOrder !== lastPersisted.arrowOrder ||
     persistedNow.counters !== lastPersisted.counters ||
     persistedNow.showGrid !== lastPersisted.showGrid ||
+    persistedNow.gridStyle !== lastPersisted.gridStyle ||
     persistedNow.commentThreads !== lastPersisted.commentThreads ||
     persistedNow.commentThreadOrder !== lastPersisted.commentThreadOrder
   if (persistedChanged) {
@@ -1879,6 +1917,7 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
     state.arrowOrder,
     state.counters,
     state.showGrid,
+    state.gridStyle,
     state.commentThreads,
     state.commentThreadOrder,
     scheduleBroadcast,
@@ -1967,6 +2006,7 @@ export function useDiagramEditor(diagramId, initialData, role = 'owner', email, 
     state.arrowOrder,
     state.counters,
     state.showGrid,
+    state.gridStyle,
     state.commentThreads,
     state.commentThreadOrder,
     scheduleSave,

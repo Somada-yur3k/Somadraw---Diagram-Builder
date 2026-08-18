@@ -1,4 +1,4 @@
-import { ShapeBody } from './editor/Shape'
+import { ShapeBody } from '../editor/Shape'
 
 // Mock shapes are display-only - disableDblClick below blocks the one path
 // (EditableText's own double-click-to-edit handler) that could ever call

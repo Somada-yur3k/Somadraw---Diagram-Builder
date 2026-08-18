@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router'
-import { supabase } from '../lib/supabaseClient'
-import { createBlankDiagramData } from './editor/useDiagramEditor'
+import { supabase } from '../../lib/supabaseClient'
+import { createBlankDiagramData } from '../editor/useDiagramEditor'
 import AnnouncementBanner from './AnnouncementBanner'
 
 function WorkspaceHome() {

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import MonitorPage from './components/MonitorPage.jsx'
+import MonitorPage from './components/monitor/MonitorPage.jsx'
 
 // Own entry point, own bundle, own <html> document (monitor.html) - this
 // intentionally never imports App.jsx or main.jsx's <BrowserRouter>.

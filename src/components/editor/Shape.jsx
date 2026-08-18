@@ -17,6 +17,48 @@ import { NetworkIcon } from './networkIcons'
 import { computeAlignmentSnap } from './alignmentSnap'
 import { ERD_HEADER_HEIGHT, ERD_ROW_HEIGHT } from './useDiagramEditor'
 
+// The four pre-themed "architecture layer" container frames (see
+// shapeCatalog.js's systemArchShapes 'Layer Containers' category) - one
+// shared lookup instead of four near-identical shape-body branches. Each
+// `icon` key is an existing SystemArchIcon glyph (browser/server/database/
+// cloud), not a new drawing, and `label` doubles as the placeholder shown
+// before a user renames the shape (matches DEFAULT_TEXT in
+// useDiagramEditor.js, which is what's actually pre-filled at creation).
+const LAYER_CONTAINER_STYLE = {
+  sysClientLayer: {
+    icon: 'sysBrowser',
+    label: 'Client Layer',
+    border: 'border-blue-400/70',
+    background: 'bg-blue-50',
+    headerBorder: 'border-blue-200',
+    iconColor: 'text-blue-600',
+  },
+  sysApplicationLayer: {
+    icon: 'sysAppServer',
+    label: 'Application Layer',
+    border: 'border-violet-400/70',
+    background: 'bg-violet-50',
+    headerBorder: 'border-violet-200',
+    iconColor: 'text-violet-600',
+  },
+  sysDataLayer: {
+    icon: 'sysDatabase',
+    label: 'Data Layer',
+    border: 'border-emerald-400/70',
+    background: 'bg-emerald-50',
+    headerBorder: 'border-emerald-200',
+    iconColor: 'text-emerald-600',
+  },
+  sysExternalLayer: {
+    icon: 'sysCloudService',
+    label: 'External Services',
+    border: 'border-orange-400/70',
+    background: 'bg-orange-50',
+    headerBorder: 'border-orange-200',
+    iconColor: 'text-orange-600',
+  },
+}
+
 function DeleteButton({ onClick }) {
   return (
     <button
@@ -1064,6 +1106,46 @@ export function ShapeBody({ shape, dispatch, disableDblClick, dragHandlers, zoom
             value={shape.text}
             onCommit={commitField('text')}
             placeholder="System"
+            placeholderOnlyWhileEditing
+            disableDblClick={disableDblClick}
+            className="text-[12px] font-semibold text-ink"
+            style={textStyle}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // Same container frame as 'boundary' above, just pre-themed per common
+  // architecture layer role (Client/Application/Data/External) - one shared
+  // lookup driving color/icon/default label instead of four near-duplicate
+  // branches, the same "one component, per-key lookup" shape SystemArchIcon
+  // itself already uses. Icons are existing System Architecture glyphs
+  // (browser/server/database/cloud), reused rather than drawn again.
+  if (LAYER_CONTAINER_STYLE[shape.type]) {
+    const layer = LAYER_CONTAINER_STYLE[shape.type]
+    return (
+      <div
+        className={`relative h-full w-full overflow-hidden rounded-lg border-2 ${layer.border} ${layer.background}`}
+        style={{ ...cornerStyle, borderColor: fill || undefined, borderStyle: borderStyleValue, backgroundColor: fillTint }}
+      >
+        {/* A full-width header strip - not just a small pointer-events-auto
+            patch hugging the icon+label like 'boundary' above - is this
+            container's actual grab handle: dragHandlers spread across the
+            whole bar, same pattern as SwimlaneBody's own header (see that
+            component's comment on why). The interior below stays
+            pointer-events-none for whatever's placed inside it, and the
+            10px border alone was too thin to reliably find/click to select
+            or delete the container itself. */}
+        <div
+          {...dragHandlers}
+          className={`pointer-events-auto absolute inset-x-0 top-0 flex h-8 cursor-move items-center gap-1.5 border-b px-2.5 ${layer.headerBorder}`}
+        >
+          <SystemArchIcon type={layer.icon} size={16} className={`shrink-0 ${layer.iconColor}`} />
+          <EditableText
+            value={shape.text}
+            onCommit={commitField('text')}
+            placeholder={layer.label}
             placeholderOnlyWhileEditing
             disableDblClick={disableDblClick}
             className="text-[12px] font-semibold text-ink"

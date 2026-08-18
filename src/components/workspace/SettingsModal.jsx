@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { supabase } from '../lib/supabaseClient'
-import { getDisplayUser } from '../lib/userDisplay'
-import { formatRemaining } from '../lib/timeFormat'
-import { OWNER_EMAIL } from '../lib/ownerEmail'
-import { SHORTCUT_GROUPS } from '../lib/shortcuts'
+import { supabase } from '../../lib/supabaseClient'
+import { getDisplayUser } from '../../lib/userDisplay'
+import { formatRemaining } from '../../lib/timeFormat'
+import { OWNER_EMAIL } from '../../lib/ownerEmail'
+import { SHORTCUT_GROUPS } from '../../lib/shortcuts'
 
 const MAX_USERNAME_LENGTH = 24
 const COOLDOWN_MS = 60 * 60 * 1000

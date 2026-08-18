@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import SiteHeader from './SiteHeader'
+import SiteHeader from '../workspace/SiteHeader'
 
 // Every answer here is accurate to how Somadraw actually works today - see
 // GETTING_STARTED_STEPS/ExportShareContent in DocsPage.jsx for the same

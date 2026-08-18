@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import somadrawLogo from '../assets/SomadrawLogo.png'
+import somadrawLogo from '../../assets/SomadrawLogo.png'
 
 const productLinks = [
   { href: '#features', label: 'Features' },

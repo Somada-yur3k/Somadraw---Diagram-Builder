@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { UPDATE_BADGE_LABEL, UPDATE_BADGE_STYLE, useAnnouncements } from '../lib/updates'
+import { UPDATE_BADGE_LABEL, UPDATE_BADGE_STYLE, useAnnouncements } from '../../lib/updates'
 
 const STORAGE_KEY = 'somadraw-dismissed-update'
 

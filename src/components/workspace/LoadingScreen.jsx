@@ -1,4 +1,4 @@
-import somadrawLogo from '../assets/SomadrawLogo.png'
+import somadrawLogo from '../../assets/SomadrawLogo.png'
 
 function OrbitArrow() {
   return (

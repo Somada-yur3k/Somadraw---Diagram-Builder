@@ -81,10 +81,14 @@ export const erdShapes = [{ key: 'erdTable', label: 'Table' }]
 // forgotten:
 //  - "Actor / User" reuses the existing 'actor' key (usecaseShapes above) -
 //    same concept, no reason to draw a second, subtly-different person icon.
-//  - "Note / Text Box" reuses the existing textLabelTool (Tools row), and
-//    "Container / Group" / "Zone / Boundary" reuse the existing 'boundary'
-//    shape (usecaseShapes above) - all three are already fully general,
-//    not specific to any one diagram type.
+//  - "Note / Text Box" reuses the existing textLabelTool (Tools row).
+//  - "Container / Group" / "Zone / Boundary" reuses the existing 'boundary'
+//    shape (usecaseShapes above) rather than a second, near-identical frame
+//    shape - it's already fully general, not specific to any one diagram
+//    type. Not offered from this diagram type's own picker/sidebar at all
+//    (switch to Use Case Diagram to place one) - the pre-themed Layer
+//    Containers below cover the "group shapes into a labeled zone" need
+//    for System Architecture specifically.
 //  - The "Common Symbols" group (Start/End/Decision/Process) is exactly
 //    flowchartShapes under different names - that's what the Flowchart
 //    diagram type is for, not a reason to duplicate those four shapes
@@ -160,9 +164,17 @@ export const systemArchShapes = [
   { key: 'sysPerformance', label: 'Performance', category: 'Monitoring & Management' },
   { key: 'sysConfig', label: 'Configuration', category: 'Monitoring & Management' },
 
-  { key: 'sysStickyNote', label: 'Sticky Note', category: 'Annotations & Containers', noBorder: true },
-  { key: 'sysDocument', label: 'Document', category: 'Annotations & Containers', noBorder: true },
-  { key: 'sysDbNote', label: 'Database Note', category: 'Annotations & Containers', noBorder: true },
+  // Same container-frame shape as 'boundary' (usecaseShapes above, see this
+  // array's own comment on why it isn't repeated here) - a real frame, no
+  // `noBorder`, meant to visually group other shapes - but pre-themed per
+  // common architecture layer instead of one generic gray box - saves
+  // re-picking a color/icon by hand every time for the same four groupings
+  // most system diagrams already reach for. See Shape.jsx's
+  // LAYER_CONTAINER_STYLE for the icon/color each one renders with.
+  { key: 'sysClientLayer', label: 'Client Layer', category: 'Layer Containers' },
+  { key: 'sysApplicationLayer', label: 'Application Layer', category: 'Layer Containers' },
+  { key: 'sysDataLayer', label: 'Data Layer', category: 'Layer Containers' },
+  { key: 'sysExternalLayer', label: 'External Services', category: 'Layer Containers' },
 ]
 
 // Which System Architecture shapes render without the standard bordered
@@ -201,12 +213,21 @@ export function groupShapesByCategory(shapes) {
   }
   return groups
 }
-// Every key in systemArchShapes above that isn't reused from elsewhere
-// (i.e. excludes 'actor') - Shape.jsx and ShapeIcon.jsx both check
+// Every key in systemArchShapes above that isn't reused from elsewhere or
+// one of the four Layer Containers - Shape.jsx and ShapeIcon.jsx both check
 // membership here to decide "render this through the shared System
-// Architecture path" without needing a giant if/else per key.
+// Architecture path" without needing a giant if/else per key. The Layer
+// Containers each have their own dedicated renderer (Shape.jsx's
+// LAYER_CONTAINER_STYLE, ShapeIcon.jsx's matching case) that
+// SystemArchNodeBody/SystemArchIcon would otherwise shadow them with.
+const systemArchContainerKeys = new Set([
+  'sysClientLayer',
+  'sysApplicationLayer',
+  'sysDataLayer',
+  'sysExternalLayer',
+])
 export const systemArchOwnShapeKeys = new Set(
-  systemArchShapes.map((shape) => shape.key).filter((key) => key !== 'actor'),
+  systemArchShapes.map((shape) => shape.key).filter((key) => key !== 'actor' && !systemArchContainerKeys.has(key)),
 )
 
 // Network Diagram notation, shown in its own "Network Diagram" section -
@@ -216,8 +237,10 @@ export const systemArchOwnShapeKeys = new Set(
 // same reasons systemArchShapes' own comments already explain.
 //
 // Left out, for the same reasons as systemArchShapes' own equivalents:
-//  - "Note / Text Box" / "Label" reuse textLabelTool; "Zone / Boundary" /
-//    "Group" reuse the existing 'boundary' shape.
+//  - "Note / Text Box" / "Label" reuse textLabelTool.
+//  - "Zone / Boundary" / "Group" reuses the existing 'boundary' shape,
+//    repeated below under Documentation & Containers - same reasoning as
+//    systemArchShapes' own copy of this entry (see that array's comment).
 //  - "Network Topologies (Examples)" (Star/Bus/Ring/Mesh/Tree/Hybrid) - each
 //    of those is a whole *composition* of several nodes and links arranged
 //    a particular way, not a single placeable shape - there's nothing to
@@ -293,11 +316,22 @@ export const networkShapes = [
   { key: 'netVirtualNetwork', label: 'Virtual Network', category: 'Virtualization & Containers' },
   { key: 'netVlan', label: 'VLAN', category: 'Virtualization & Containers' },
 
-  { key: 'netStickyNote', label: 'Sticky Note', category: 'Documentation & Annotations', noBorder: true },
-  { key: 'netCallout', label: 'Callout', category: 'Documentation & Annotations', noBorder: true },
+  { key: 'netStickyNote', label: 'Sticky Note', category: 'Documentation & Containers', noBorder: true },
+  { key: 'netCallout', label: 'Callout', category: 'Documentation & Containers', noBorder: true },
+  // Reused from usecaseShapes' 'boundary' - see this array's own comment
+  // above, and systemArchShapes' matching copy of this entry. No `noBorder`
+  // - the border is the whole point, a real frame meant to visually group
+  // other shapes rather than a self-contained note/icon.
+  { key: 'boundary', label: 'Container / Group', category: 'Documentation & Containers' },
 ]
 
-export const networkOwnShapeKeys = new Set(networkShapes.map((shape) => shape.key))
+// Excludes 'boundary' even though it's listed above - same reasoning as
+// systemArchOwnShapeKeys' own exclusion of it (see that Set's comment):
+// it has its own dedicated container-frame renderer that NetworkNodeBody/
+// NetworkIcon would otherwise shadow it with.
+export const networkOwnShapeKeys = new Set(
+  networkShapes.map((shape) => shape.key).filter((key) => key !== 'boundary'),
+)
 export const networkNoBorderKeys = new Set(
   networkShapes.filter((shape) => shape.noBorder).map((shape) => shape.key),
 )
@@ -307,7 +341,17 @@ export const networkNoBorderKeys = new Set(
 // swimlane variant. Shared by Shape.jsx (pointer-events pass-through so
 // contents stay reachable) and useDiagramEditor's ADD_SHAPE (paint order:
 // unshifted to the back so anything placed inside stays visually on top).
-export const containerShapeTypes = new Set(['boundary', 'swimlaneV1', 'swimlaneV3', 'swimlaneH1', 'swimlaneH2'])
+export const containerShapeTypes = new Set([
+  'boundary',
+  'swimlaneV1',
+  'swimlaneV3',
+  'swimlaneH1',
+  'swimlaneH2',
+  'sysClientLayer',
+  'sysApplicationLayer',
+  'sysDataLayer',
+  'sysExternalLayer',
+])
 // Plain geometric shapes, reachable only from the Shapes button's dropdown
 // (not the sidebar's own collapsible sections, unlike dfdShapes/
 // flowchartShapes above) - own key namespace (not reusing e.g. 'process')
